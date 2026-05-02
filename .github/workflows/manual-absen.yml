@@ -11,7 +11,7 @@ on:
           - checkin
           - checkout
       jam_override:
-        description: 'Jam absen (HH:MM:SS) - kosongkan = pakai jam sekarang'
+        description: 'Jam absen HH:MM:SS (kosong = jam sekarang)'
         required: false
         default: ''
 
@@ -19,38 +19,35 @@ jobs:
   manual-absen:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
 
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: ⏰ Show Current Time (Jakarta)
+      - name: ⏰ Waktu Jakarta
         run: |
-          echo "UTC Time: $(date -u)"
-          echo "Jakarta Time: $(TZ='Asia/Jakarta' date)"
+          echo "UTC: $(date -u)"
+          echo "WIB: $(TZ='Asia/Jakarta' date)"
           echo "Action: ${{ github.event.inputs.action }}"
-          echo "Jam Override: ${{ github.event.inputs.jam_override }}"
+          echo "Jam: ${{ github.event.inputs.jam_override }}"
 
       - name: 👆 Execute Manual Absen
         env:
-          ABSEN_NIK: ${{ secrets.ABSEN_NIK }}
-          ABSEN_PASSWORD: ${{ secrets.ABSEN_PASSWORD }}
-          ABSEN_SHIFT: ${{ secrets.ABSEN_SHIFT }}
-          JAM_OVERRIDE: ${{ github.event.inputs.jam_override }}
           MANUAL_MODE: 'true'
+          JAM_OVERRIDE: ${{ github.event.inputs.jam_override }}
         run: node scripts/absensi.js ${{ github.event.inputs.action }}
 
-      - name: 💾 Save Log to Repository
+      - name: 💾 Save Log
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions Bot"
           git add log.json || true
-          git diff --staged --quiet || git commit -m "👆 Manual ${{ github.event.inputs.action }} - $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')"
+          git diff --staged --quiet || git commit -m "👆 Manual ${{ github.event.inputs.action }} - $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M WIB')"
           git push || true
