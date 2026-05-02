@@ -1,0 +1,21 @@
+{
+  "tanggalMerah": [
+    { "tanggal": "2026-01-01", "keterangan": "Tahun Baru Masehi" },
+    { "tanggal": "2026-01-27", "keterangan": "Isra Mikraj" },
+    { "tanggal": "2026-01-29", "keterangan": "Tahun Baru Imlek" },
+    { "tanggal": "2026-03-28", "keterangan": "Hari Raya Nyepi" },
+    { "tanggal": "2026-04-02", "keterangan": "Wafat Yesus Kristus" },
+    { "tanggal": "2026-03-19", "keterangan": "Awal Ramadhan (estimasi)" },
+    { "tanggal": "2026-04-17", "keterangan": "Idul Fitri (estimasi)" },
+    { "tanggal": "2026-04-18", "keterangan": "Idul Fitri (estimasi)" },
+    { "tanggal": "2026-05-01", "keterangan": "Hari Buruh" },
+    { "tanggal": "2026-05-14", "keterangan": "Kenaikan Isa Almasih" },
+    { "tanggal": "2026-05-23", "keterangan": "Waisak" },
+    { "tanggal": "2026-06-01", "keterangan": "Hari Lahir Pancasila" },
+    { "tanggal": "2026-06-24", "keterangan": "Idul Adha (estimasi)" },
+    { "tanggal": "2026-07-14", "keterangan": "Tahun Baru Islam (estimasi)" },
+    { "tanggal": "2026-08-17", "keterangan": "HUT Kemerdekaan RI" },
+    { "tanggal": "2026-09-22", "keterangan": "Maulid Nabi (estimasi)" },
+    { "tanggal": "2026-12-25", "keterangan": "Hari Raya Natal" }
+  ]
+}

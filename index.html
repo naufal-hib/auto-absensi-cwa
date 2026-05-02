@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Auto Absensi CWA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #060910;
+      --bg2: #0d1117;
+      --surface: #111820;
+      --surface2: #1a2332;
+      --surface3: #1f2d40;
+      --border: rgba(56,189,248,0.1);
+      --border2: rgba(56,189,248,0.2);
+      --accent: #38bdf8;
+      --accent-dim: rgba(56,189,248,0.15);
+      --purple: #a78bfa;
+      --purple-dim: rgba(167,139,250,0.15);
+      --green: #4ade80;
+      --green-dim: rgba(74,222,128,0.12);
+      --red: #f87171;
+      --red-dim: rgba(248,113,113,0.12);
+      --yellow: #fbbf24;
+      --yellow-dim: rgba(251,191,36,0.12);
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --text3: #475569;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Plus Jakarta Sans', sans-serif;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+    /* HEADER */
+    .header {
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(6,9,16,0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 13px 18px;
+    }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+    }
+    .logo-text { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); }
+    .logo-sub { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .live-clock {
+      font-family: var(--mono); font-size: 12px; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid var(--border2);
+      padding: 5px 10px; border-radius: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+      animation: blink 2s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+    /* NAV */
+    .nav {
+      display: flex; gap: 4px; padding: 10px 14px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .nav::-webkit-scrollbar { display: none; }
+    .nav-btn {
+      flex-shrink: 0; padding: 7px 13px; border-radius: 8px;
+      border: 1px solid transparent; background: transparent;
+      color: var(--text3); font-family: var(--sans);
+      font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .nav-btn.active { background: var(--accent-dim); border-color: var(--border2); color: var(--accent); }
+
+    /* PAGES */
+    .page { display: none; padding: 14px 14px 40px; max-width: 500px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* CARD */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--text3); font-family: var(--mono); margin-bottom: 14px;
+    }
+
+    /* TODAY */
+    .today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .today-box {
+      background: var(--surface2); border-radius: var(--radius-sm);
+      padding: 14px; border: 1px solid var(--border);
+    }
+    .today-box-label { font-size: 10px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .today-box-time { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+
+    /* BADGE */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 20px; font-size: 10px;
+      font-weight: 700; font-family: var(--mono); letter-spacing: 0.3px;
+    }
+    .bg { background: var(--green-dim); color: var(--green); border: 1px solid rgba(74,222,128,0.2); }
+    .br { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+    .by { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(251,191,36,0.2); }
+    .bb { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--border2); }
+    .bp { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+    .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+    .stat-num { font-family: var(--mono); font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 10px; color: var(--text3); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* LOG */
+    .log-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 14px;
+      display: grid; grid-template-columns: 34px 1fr auto;
+      gap: 10px; align-items: center; margin-bottom: 8px;
+      animation: fadeUp 0.25s ease;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)} }
+    .log-icon-box { width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0; }
+    .lic-s{background:var(--green-dim)} .lic-e{background:var(--red-dim)} .lic-k{background:rgba(100,116,139,0.1)} .lic-w{background:var(--yellow-dim)}
+    .log-type-text { font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+    .log-msg-text { font-size:11px;color:var(--text2);margin-top:2px;line-height:1.4; }
+    .log-meta { text-align:right;flex-shrink:0; }
+    .log-time-text { font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap; }
+    .log-jam-text { font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700;text-align:right; }
+
+    /* JADWAL */
+    .jadwal-table { width:100%;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border); }
+    .jadwal-row { display:grid;grid-template-columns:1.3fr 1fr 1fr;padding:11px 14px;border-bottom:1px solid var(--border);font-size:12px;align-items:center; }
+    .jadwal-row:last-child{border-bottom:none}
+    .jadwal-row.head{background:var(--surface2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono)}
+    .jadwal-row.today-hl{background:rgba(56,189,248,0.06);border-left:2px solid var(--accent)}
+    .j-day{font-weight:600;color:var(--text)} .j-in{font-family:var(--mono);font-size:11px;color:var(--green)} .j-out{font-family:var(--mono);font-size:11px;color:var(--purple)} .j-off{font-size:11px;color:var(--text3)}
+
+    /* FORM */
+    .form-group{margin-bottom:13px}
+    .form-label{display:block;font-size:11px;font-weight:700;color:var(--text2);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+    .form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color 0.2s}
+    .form-input:focus{border-color:var(--accent)}
+    .form-input::placeholder{color:var(--text3)}
+
+    /* TOGGLE */
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px}
+    .toggle-label{font-size:13px;font-weight:600;color:var(--text)}
+    .toggle-desc{font-size:11px;color:var(--text3);margin-top:2px}
+    .toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+    .toggle input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--surface3);border-radius:24px;border:1px solid var(--border);transition:all 0.25s}
+    .toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--text3);border-radius:50%;transition:all 0.25s}
+    .toggle input:checked+.toggle-slider{background:rgba(74,222,128,0.2);border-color:rgba(74,222,128,0.4)}
+    .toggle input:checked+.toggle-slider::before{transform:translateX(20px);background:var(--green)}
+
+    /* BTN */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border-radius:var(--radius-sm);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.2s;width:100%}
+    .btn:active{transform:scale(0.97)}
+    .btn-primary{background:var(--accent);color:#000}
+    .btn-secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+    .btn-danger{background:var(--red-dim);border:1px solid rgba(248,113,113,0.3);color:var(--red)}
+
+    /* LIBUR */
+    .tgl-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px}
+    .tgl-date{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:700}
+    .tgl-name{font-size:12px;color:var(--text2);margin-top:2px}
+    .tgl-del{background:var(--red-dim);border:1px solid rgba(248,113,113,0.2);color:var(--red);padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:var(--sans)}
+
+    /* MODAL */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:999;display:flex;align-items:flex-end;padding:20px 14px}
+    .modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:24px;width:100%;max-width:500px;margin:0 auto}
+    .modal-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px}
+    .modal-desc{font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.6}
+
+    /* MISC */
+    .loading-box{display:flex;align-items:center;justify-content:center;gap:10px;padding:30px;color:var(--text3);font-size:13px}
+    .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .empty-box{text-align:center;padding:36px 20px;color:var(--text3)}
+    .empty-icon{font-size:36px;margin-bottom:10px}
+    .empty-text{font-size:13px;line-height:1.5}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;color:var(--text);z-index:9999;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+    .toast.show{transform:translateX(-50%) translateY(0)}
+    .toast.success{border-color:rgba(74,222,128,0.3);color:var(--green)}
+    .toast.error{border-color:rgba(248,113,113,0.3);color:var(--red)}
+    .section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-family:var(--mono);margin-bottom:10px;margin-top:4px}
+    .info-box{background:rgba(56,189,248,0.06);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:14px}
+    .info-box a{color:var(--accent)}
+    .gap{margin-top:8px}
+  </style>
+</head>
+<body>
+
+<!-- SETUP MODAL -->
+<div class="modal-overlay" id="setupModal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">⚙️ Setup Awal</div>
+    <div class="modal-desc">
+      Hubungkan dashboard ke GitHub repo kamu. Data disimpan di browser (localStorage), tidak dikirim ke mana-mana.
+    </div>
+    <div class="form-group">
+      <label class="form-label">GitHub Username</label>
+      <input class="form-input" id="setupUser" placeholder="contoh: johndoe"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nama Repository</label>
+      <input class="form-input" id="setupRepo" placeholder="contoh: auto-absensi-cwa"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">GitHub Token (untuk edit file)</label>
+      <input class="form-input" id="setupToken" type="password" placeholder="ghp_xxxxxxxxxxxx"/>
+      <div class="info-box" style="margin-top:8px;margin-bottom:0">
+        Buat di: <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
+        Pilih <strong>Classic</strong> → centang <strong>repo</strong> → Generate
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveSetup()">💾 Simpan & Mulai</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">🤖</div>
+      <div>
+        <div class="logo-text">AUTO ABSENSI</div>
+        <div class="logo-sub" id="repoLabel">CWA System</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-clock" id="liveClock">--:--:--</div>
+      <div class="status-dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <button class="nav-btn active" onclick="switchPage('dashboard',this)">📊 Dashboard</button>
+  <button class="nav-btn" onclick="switchPage('log',this)">📋 Log</button>
+  <button class="nav-btn" onclick="switchPage('jadwal',this)">🕐 Jadwal</button>
+  <button class="nav-btn" onclick="switchPage('libur',this)">📅 Libur</button>
+  <button class="nav-btn" onclick="switchPage('settings',this)">⚙️ Settings</button>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="page active" id="page-dashboard">
+  <div class="card">
+    <div class="card-title">📅 Status Hari Ini</div>
+    <div class="today-grid">
+      <div class="today-box">
+        <div class="today-box-label">🟢 Check In</div>
+        <div class="today-box-time" id="todayCI">--:--</div>
+        <div id="todayCIBadge"><span class="badge by">⏳ Menunggu</span></div>
+      </div>
+      <div class="today-box">
+        <div class="today-box-label">🔴 Check Out</div>
+        <div class="today-box-time" id="todayCO">--:--</div>
+        <div id="todayCOBadge"><span class="badge by">⏳ Menunggu</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-num" id="s1" style="color:var(--text)">-</div><div class="stat-label">Total</div></div>
+    <div class="stat-box"><div class="stat-num" id="s2" style="color:var(--green)">-</div><div class="stat-label">Berhasil</div></div>
+    <div class="stat-box"><div class="stat-num" id="s3" style="color:var(--red)">-</div><div class="stat-label">Gagal</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🤖 Status Otomasi</div>
+    <div class="toggle-row" style="margin-bottom:0">
+      <div>
+        <div class="toggle-label">GitHub Actions</div>
+        <div class="toggle-desc" id="actText">Mengecek status...</div>
+      </div>
+      <span class="badge bb" id="actBadge">...</span>
+    </div>
+  </div>
+
+  <div class="section-label">Log Terbaru</div>
+  <div id="quickLog"><div class="loading-box"><div class="spinner"></div>Memuat...</div></div>
+  <button class="btn btn-secondary gap" onclick="switchPage('log', document.querySelectorAll('.nav-btn')[1])">Lihat Semua Log →</button>
+</div>
+
+<!-- ===== LOG ===== -->
+<div class="page" id="page-log">
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-num" id="ls1" style="color:var(--text)">-</div><div class="stat-label">Total</div></div>
+    <div class="stat-box"><div class="stat-num" id="ls2" style="color:var(--green)">-</div><div class="stat-label">Berhasil</div></div>
+    <div class="stat-box"><div class="stat-num" id="ls3" style="color:var(--red)">-</div><div class="stat-label">Gagal</div></div>
+  </div>
+  <div id="logFull"><div class="loading-box"><div class="spinner"></div>Memuat log...</div></div>
+  <button class="btn btn-secondary gap" onclick="loadLogs()">↻ Refresh</button>
+</div>
+
+<!-- ===== JADWAL ===== -->
+<div class="page" id="page-jadwal">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="jadwal-table">
+      <div class="jadwal-row head"><span>Hari</span><span>Check In</span><span>Check Out</span></div>
+      <div class="jadwal-row" id="jr-senin"><span class="j-day">Senin</span><span class="j-in">07:15–07:30</span><span class="j-out">16:20–16:45</span></div>
+      <div class="jadwal-row" id="jr-selasa"><span class="j-day">Selasa</span><span class="j-in">07:15–07:30</span><span class="j-out">16:20–16:45</span></div>
+      <div class="jadwal-row" id="jr-rabu"><span class="j-day">Rabu</span><span class="j-in">07:15–07:30</span><span class="j-out">16:20–16:45</span></div>
+      <div class="jadwal-row" id="jr-kamis"><span class="j-day">Kamis</span><span class="j-in">07:15–07:30</span><span class="j-out">16:20–16:45</span></div>
+      <div class="jadwal-row" id="jr-jumat"><span class="j-day">Jumat</span><span class="j-in">06:45–07:10</span><span class="j-out">16:20–16:45</span></div>
+      <div class="jadwal-row" id="jr-sabtu"><span class="j-day">Sabtu</span><span class="j-in">07:15–07:30</span><span class="j-out">13:20–13:50</span></div>
+      <div class="jadwal-row" id="jr-minggu"><span class="j-day" style="color:var(--text3)">Minggu</span><span class="j-off">Libur</span><span class="j-off">Libur</span></div>
+    </div>
+  </div>
+  <div class="info-box">⏰ Jam absen di-<strong>random</strong> setiap hari dalam rentang di atas agar terlihat natural.<br><br>🤖 GitHub Actions berjalan otomatis sesuai jadwal cron UTC.</div>
+</div>
+
+<!-- ===== LIBUR ===== -->
+<div class="page" id="page-libur">
+  <div class="card">
+    <div class="card-title">➕ Tambah Hari Libur</div>
+    <div class="form-group">
+      <label class="form-label">Tanggal</label>
+      <input class="form-input" type="date" id="newTglDate"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Keterangan</label>
+      <input class="form-input" id="newTglName" placeholder="contoh: Idul Fitri"/>
+    </div>
+    <button class="btn btn-primary" onclick="tambahLibur()">➕ Tambah</button>
+  </div>
+  <div class="section-label">Daftar Hari Libur</div>
+  <div id="liburList"><div class="loading-box"><div class="spinner"></div>Memuat...</div></div>
+</div>
+
+<!-- ===== SETTINGS ===== -->
+<div class="page" id="page-settings">
+  <div class="card">
+    <div class="card-title">🤖 On / Off Otomasi</div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Auto Check In</div><div class="toggle-desc">Workflow checkin.yml</div></div>
+      <label class="toggle"><input type="checkbox" id="tCI" checked onchange="toggleWorkflow('checkin',this.checked)"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Auto Check Out</div><div class="toggle-desc">Workflow checkout.yml</div></div>
+      <label class="toggle"><input type="checkbox" id="tCO" checked onchange="toggleWorkflow('checkout',this.checked)"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="info-box" style="margin-bottom:0">⚠️ Toggle ini edit file workflow di repo GitHub — butuh Token.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔐 Konfigurasi Absensi</div>
+    <div class="form-group"><label class="form-label">NIK</label><input class="form-input" id="cfgNik" placeholder="Nomor Induk Karyawan"/></div>
+    <div class="form-group"><label class="form-label">Shift ID</label><input class="form-input" id="cfgShift" placeholder="contoh: 1"/></div>
+    <div class="info-box">💡 Password disimpan di <strong>GitHub Secrets</strong>, tidak perlu dimasukkan di sini.</div>
+    <button class="btn btn-primary" onclick="saveConfig()">💾 Simpan Config</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔗 GitHub Connection</div>
+    <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="editUser" placeholder="GitHub username"/></div>
+    <div class="form-group"><label class="form-label">Repository</label><input class="form-input" id="editRepo" placeholder="Nama repo"/></div>
+    <div class="form-group"><label class="form-label">GitHub Token</label><input class="form-input" type="password" id="editToken" placeholder="ghp_xxxx"/></div>
+    <button class="btn btn-secondary" onclick="updateSetup()">🔄 Update Koneksi</button>
+    <div class="gap"><button class="btn btn-danger" onclick="resetSetup()">🗑️ Reset & Logout</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== STATE =====
+let GH = {user:'',repo:'',token:''};
+let tanggalMerahData = [];
+let logsData = [];
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => {
+  GH.user = localStorage.getItem('gh_user')||'';
+  GH.repo = localStorage.getItem('gh_repo')||'';
+  GH.token = localStorage.getItem('gh_token')||'';
+
+  updateClock();
+  setInterval(updateClock, 1000);
+  highlightToday();
+
+  if (!GH.user || !GH.repo) {
+    document.getElementById('setupModal').style.display = 'flex';
+  } else {
+    init();
+  }
+});
+
+function init() {
+  document.getElementById('repoLabel').textContent = GH.user+'/'+GH.repo;
+  prefillSettings();
+  loadLogs();
+  loadLibur();
+  loadConfig();
+}
+
+// ===== SETUP =====
+function saveSetup() {
+  const u = document.getElementById('setupUser').value.trim();
+  const r = document.getElementById('setupRepo').value.trim();
+  const t = document.getElementById('setupToken').value.trim();
+  if (!u||!r){showToast('❌ Username & Repo wajib diisi','error');return;}
+  GH={user:u,repo:r,token:t};
+  localStorage.setItem('gh_user',u);
+  localStorage.setItem('gh_repo',r);
+  localStorage.setItem('gh_token',t);
+  document.getElementById('setupModal').style.display='none';
+  showToast('✅ Setup tersimpan!','success');
+  init();
+}
+
+function updateSetup() {
+  const u=document.getElementById('editUser').value.trim()||GH.user;
+  const r=document.getElementById('editRepo').value.trim()||GH.repo;
+  const t=document.getElementById('editToken').value.trim()||GH.token;
+  GH={user:u,repo:r,token:t};
+  localStorage.setItem('gh_user',u);
+  localStorage.setItem('gh_repo',r);
+  localStorage.setItem('gh_token',t);
+  showToast('✅ Koneksi diupdate!','success');
+  init();
+}
+
+function resetSetup() {
+  if(!confirm('Reset semua data koneksi?'))return;
+  localStorage.clear();
+  location.reload();
+}
+
+function prefillSettings() {
+  document.getElementById('editUser').value=GH.user;
+  document.getElementById('editRepo').value=GH.repo;
+  document.getElementById('editToken').value=GH.token;
+}
+
+// ===== CLOCK =====
+function updateClock() {
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));
+  document.getElementById('liveClock').textContent=
+    [now.getHours(),now.getMinutes(),now.getSeconds()].map(x=>x.toString().padStart(2,'0')).join(':');
+}
+
+// ===== HIGHLIGHT TODAY =====
+function highlightToday() {
+  const days=['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));
+  const el=document.getElementById('jr-'+days[now.getDay()]);
+  if(el)el.classList.add('today-hl');
+}
+
+// ===== NAV =====
+function switchPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(name==='log')loadLogs();
+  if(name==='libur')loadLibur();
+  if(name==='settings'){loadConfig();prefillSettings();}
+}
+
+// ===== GITHUB API =====
+async function ghGet(path) {
+  const url=`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/${path}`;
+  const h={'Accept':'application/vnd.github+json'};
+  if(GH.token)h['Authorization']=`Bearer ${GH.token}`;
+  const r=await fetch(url,{headers:h});
+  if(!r.ok)throw new Error(`GH ${r.status}: ${path}`);
+  return r.json();
+}
+
+async function ghPut(path, content, message, sha) {
+  if(!GH.token){showToast('❌ Token GitHub diperlukan!','error');return false;}
+  const r=await fetch(`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/${path}`,{
+    method:'PUT',
+    headers:{'Authorization':`Bearer ${GH.token}`,'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+    body:JSON.stringify({message,content:btoa(unescape(encodeURIComponent(content))),...(sha&&{sha})})
+  });
+  return r.ok;
+}
+
+async function getRaw(filename) {
+  const r=await fetch(`https://raw.githubusercontent.com/${GH.user}/${GH.repo}/main/${filename}?t=${Date.now()}`);
+  if(!r.ok)throw new Error('Not found: '+filename);
+  return r.text();
+}
+
+// ===== LOGS =====
+async function loadLogs() {
+  try {
+    logsData=JSON.parse(await getRaw('log.json'));
+  } catch(e){ logsData=[]; }
+
+  const ok=logsData.filter(l=>l.status==='BERHASIL').length;
+  const err=logsData.filter(l=>l.status==='ERROR').length;
+  const total=logsData.length;
+
+  ['s1','ls1'].forEach(id=>document.getElementById(id).textContent=total);
+  ['s2','ls2'].forEach(id=>document.getElementById(id).textContent=ok);
+  ['s3','ls3'].forEach(id=>document.getElementById(id).textContent=err);
+
+  updateTodayStatus();
+  updateActionsStatus();
+  renderLogs('quickLog',logsData.slice(0,5));
+  renderLogs('logFull',logsData.slice(0,100));
+}
+
+function renderLogs(id, logs) {
+  const el=document.getElementById(id);
+  if(!logs.length){
+    el.innerHTML=`<div class="empty-box"><div class="empty-icon">📭</div><div class="empty-text">Belum ada log absensi</div></div>`;
+    return;
+  }
+  el.innerHTML=logs.map(l=>{
+    const{icon,cls}=logStyle(l.status);
+    const msg=(l.message||'').substring(0,70)+(l.message&&l.message.length>70?'…':'');
+    return`<div class="log-item">
+      <div class="log-icon-box ${cls}">${icon}</div>
+      <div>
+        <div class="log-type-text">${l.type||'-'} <span class="badge ${bCls(l.status)}">${l.status}</span></div>
+        <div class="log-msg-text">${msg}</div>
+      </div>
+      <div class="log-meta">
+        <div class="log-time-text">${fmtTs(l.timestamp)}</div>
+        ${l.jamAbsen?`<div class="log-jam-text">${l.jamAbsen}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function logStyle(s){
+  const m={'BERHASIL':{icon:'✅',cls:'lic-s'},'ERROR':{icon:'❌',cls:'lic-e'},'SKIP':{icon:'⏭️',cls:'lic-k'},'WARNING':{icon:'⚠️',cls:'lic-w'}};
+  return m[s]||{icon:'📝',cls:'lic-k'};
+}
+function bCls(s){return{'BERHASIL':'bg','ERROR':'br','SKIP':'bb','WARNING':'by'}[s]||'bb';}
+function fmtTs(ts){
+  if(!ts)return'-';
+  try{return new Date(ts).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','');}
+  catch(e){return ts.substring(0,16);}
+}
+
+function updateTodayStatus() {
+  const today=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'})).toISOString().split('T')[0];
+  const todayLogs=logsData.filter(l=>{try{return new Date(l.timestamp).toISOString().split('T')[0]===today;}catch(e){return false;}});
+  const ci=todayLogs.find(l=>l.type==='CHECKIN');
+  const co=todayLogs.find(l=>l.type==='CHECKOUT');
+  if(ci){document.getElementById('todayCI').textContent=ci.jamAbsen||'--:--';document.getElementById('todayCIBadge').innerHTML=`<span class="badge ${bCls(ci.status)}">${ci.status==='BERHASIL'?'✅ Berhasil':ci.status}</span>`;}
+  if(co){document.getElementById('todayCO').textContent=co.jamAbsen||'--:--';document.getElementById('todayCOBadge').innerHTML=`<span class="badge ${bCls(co.status)}">${co.status==='BERHASIL'?'✅ Berhasil':co.status}</span>`;}
+}
+
+function updateActionsStatus() {
+  const today=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'})).toISOString().split('T')[0];
+  const recent=logsData.find(l=>{try{return new Date(l.timestamp).toISOString().split('T')[0]===today;}catch(e){return false;}});
+  const badge=document.getElementById('actBadge');
+  const text=document.getElementById('actText');
+  if(recent){badge.className='badge bg';badge.textContent='● AKTIF';text.textContent='Workflow berjalan hari ini';}
+  else{badge.className='badge by';badge.textContent='○ STANDBY';text.textContent='Menunggu jadwal berikutnya';}
+}
+
+// ===== HARI LIBUR =====
+async function loadLibur() {
+  try {
+    const data=JSON.parse(await getRaw('tanggal_merah.json'));
+    tanggalMerahData=data.tanggalMerah||[];
+    renderLibur();
+  } catch(e){
+    document.getElementById('liburList').innerHTML=`<div class="empty-box"><div class="empty-icon">⚠️</div><div class="empty-text">Gagal memuat data</div></div>`;
+  }
+}
+
+function renderLibur() {
+  const el=document.getElementById('liburList');
+  if(!tanggalMerahData.length){
+    el.innerHTML=`<div class="empty-box"><div class="empty-icon">📅</div><div class="empty-text">Belum ada hari libur ditambahkan</div></div>`;
+    return;
+  }
+  const today=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'})).toISOString().split('T')[0];
+  const sorted=[...tanggalMerahData].sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+  el.innerHTML=sorted.map((t,i)=>`
+    <div class="tgl-item" style="${t.tanggal<today?'opacity:0.4':''}">
+      <div><div class="tgl-date">📅 ${t.tanggal}</div><div class="tgl-name">${t.keterangan}</div></div>
+      <button class="tgl-del" onclick="hapusLibur(${i})">Hapus</button>
+    </div>`).join('');
+}
+
+async function tambahLibur() {
+  const tgl=document.getElementById('newTglDate').value;
+  const ket=document.getElementById('newTglName').value.trim();
+  if(!tgl||!ket){showToast('❌ Tanggal & keterangan wajib diisi','error');return;}
+  if(!GH.token){showToast('❌ Token GitHub diperlukan','error');return;}
+  tanggalMerahData.push({tanggal:tgl,keterangan:ket});
+  if(await simpanLibur()){
+    document.getElementById('newTglDate').value='';
+    document.getElementById('newTglName').value='';
+    showToast('✅ Hari libur ditambahkan!','success');
+    renderLibur();
+  }
+}
+
+async function hapusLibur(idx) {
+  if(!confirm('Hapus hari libur ini?'))return;
+  if(!GH.token){showToast('❌ Token GitHub diperlukan','error');return;}
+  tanggalMerahData.splice(idx,1);
+  if(await simpanLibur()){showToast('✅ Dihapus!','success');renderLibur();}
+}
+
+async function simpanLibur() {
+  try {
+    const f=await ghGet('tanggal_merah.json');
+    const ok=await ghPut('tanggal_merah.json',JSON.stringify({tanggalMerah:tanggalMerahData},null,2),'📅 Update tanggal merah',f.sha);
+    if(!ok){showToast('❌ Gagal simpan ke GitHub','error');return false;}
+    return true;
+  } catch(e){showToast('❌ '+e.message,'error');return false;}
+}
+
+// ===== CONFIG =====
+async function loadConfig() {
+  try {
+    const cfg=JSON.parse(await getRaw('config.json'));
+    document.getElementById('cfgNik').value=cfg.nik||'';
+    document.getElementById('cfgShift').value=cfg.shift||'';
+  } catch(e){}
+}
+
+async function saveConfig() {
+  if(!GH.token){showToast('❌ Token GitHub diperlukan','error');return;}
+  const cfg={nik:document.getElementById('cfgNik').value.trim(),shift:document.getElementById('cfgShift').value.trim(),note:'Password disimpan di GitHub Secrets'};
+  try {
+    let sha=null;
+    try{const f=await ghGet('config.json');sha=f.sha;}catch(e){}
+    const ok=await ghPut('config.json',JSON.stringify(cfg,null,2),'⚙️ Update config',sha);
+    if(ok)showToast('✅ Config tersimpan!','success');
+    else showToast('❌ Gagal simpan','error');
+  } catch(e){showToast('❌ '+e.message,'error');}
+}
+
+// ===== TOGGLE WORKFLOW =====
+async function toggleWorkflow(type, enabled) {
+  if(!GH.token){
+    showToast('❌ Token GitHub diperlukan','error');
+    document.getElementById(type==='checkin'?'tCI':'tCO').checked=!enabled;
+    return;
+  }
+  const filename=`.github/workflows/${type}.yml`;
+  const label=type==='checkin'?'Check IN':'Check OUT';
+  try {
+    const fi=await ghGet(filename);
+    let content=decodeURIComponent(escape(atob(fi.content.replace(/\n/g,''))));
+    if(enabled){
+      content=content.replace(/^  # schedule:/gm,'  schedule:');
+      content=content.replace(/^    # - cron:/gm,'    - cron:');
+    } else {
+      content=content.replace(/^  schedule:/gm,'  # schedule:');
+      content=content.replace(/^    - cron:/gm,'    # - cron:');
+    }
+    const ok=await ghPut(filename,content,`${enabled?'✅ Aktifkan':'🛑 Matikan'} auto ${label}`,fi.sha);
+    if(ok)showToast(`${enabled?'✅ Diaktifkan':'🛑 Dimatikan'}: Auto ${label}`,enabled?'success':'error');
+    else showToast('❌ Gagal update workflow','error');
+  } catch(e){showToast('❌ '+e.message,'error');}
+}
+
+// ===== TOAST =====
+function showToast(msg,type='') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast '+type+' show';
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>
