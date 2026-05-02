@@ -2,6 +2,6 @@
   "nik": "08130",
   "shift": "1",
   "password": "123",
-  "workMode": 6,
+  "workMode": 5,
   "note": "NIK & Password juga harus ada di GitHub Secrets untuk Actions"
 }
