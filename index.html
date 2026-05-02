@@ -1462,28 +1462,30 @@ function switchAbsenTab(tab) {
 async function triggerActions(type) {
   if (!GH.token) { showToast('❌ Token GitHub diperlukan', 'error'); return; }
 
-  const isCI    = type === 'checkin';
-  const btnId   = isCI ? 'btnActCI'  : 'btnActCO';
-  const iconId  = isCI ? 'actCiIcon' : 'actCoIcon';
-  const wfFile  = isCI ? 'checkin.yml' : 'checkout.yml';
-  const label   = isCI ? 'Check IN' : 'Check OUT';
-  const resBox  = document.getElementById('actionsResult');
+  const isCI   = type === 'checkin';
+  const btnId  = isCI ? 'btnActCI'  : 'btnActCO';
+  const iconId = isCI ? 'actCiIcon' : 'actCoIcon';
+  const label  = isCI ? 'Check IN'  : 'Check OUT';
+  const resBox = document.getElementById('actionsResult');
 
   const btn = document.getElementById(btnId);
   btn.disabled = true; btn.style.opacity = '0.6';
   document.getElementById(iconId).textContent = '⏳';
 
-  resBox.style.display = 'block';
-  resBox.style.border  = '1px solid var(--border)';
-  resBox.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--text2)"><div class="spinner"></div> Memicu GitHub Actions ${label}...</div>`;
-
+  // Ambil jam sekarang WIB
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
   const jam = [now.getHours(), now.getMinutes(), now.getSeconds()].map(x=>x.toString().padStart(2,'0')).join(':');
+  const tgl = now.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  resBox.style.display = 'block';
+  resBox.style.border  = '1px solid var(--border)';
+  resBox.style.background = 'var(--surface2)';
+  resBox.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--text2)"><div class="spinner"></div> Memicu ${label} jam ${jam} WIB...</div>`;
 
   try {
-    // Trigger workflow_dispatch via GitHub API
+    // Trigger manual-absen.yml dengan input action + jam_override
     const resp = await fetch(
-      `https://api.github.com/repos/${GH.user}/${GH.repo}/actions/workflows/${wfFile}/dispatches`,
+      `https://api.github.com/repos/${GH.user}/${GH.repo}/actions/workflows/manual-absen.yml/dispatches`,
       {
         method : 'POST',
         headers: {
@@ -1491,69 +1493,79 @@ async function triggerActions(type) {
           'Accept'       : 'application/vnd.github+json',
           'Content-Type' : 'application/json'
         },
-        body: JSON.stringify({ ref: 'main' })
+        body: JSON.stringify({
+          ref   : 'main',
+          inputs: { action: type, jam_override: jam }
+        })
       }
     );
 
     if (resp.status === 204 || resp.ok) {
-      // Berhasil trigger
-      resBox.style.border = '1px solid rgba(74,222,128,0.3)';
-      resBox.style.background = 'rgba(74,222,128,0.05)';
+      resBox.style.border     = '1px solid rgba(74,222,128,0.3)';
+      resBox.style.background = 'rgba(74,222,128,0.04)';
       resBox.innerHTML = `
-        <div style="margin-bottom:10px">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Status Trigger</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:20px">✅</span>
-            <div>
-              <div style="font-weight:700;color:var(--green);font-size:13px">GitHub Actions Berhasil Dipicu!</div>
-              <div style="font-size:11px;color:var(--text2);margin-top:2px">HTTP 204 — Workflow ${wfFile} sedang berjalan</div>
-            </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✅</div>
+          <div>
+            <div style="font-weight:700;color:var(--green);font-size:14px">${label} Berhasil Dipicu!</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">HTTP 204 — manual-absen.yml sedang berjalan</div>
           </div>
         </div>
-        <div style="background:var(--surface);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.7;font-family:var(--mono)">
-          Workflow  : ${wfFile}<br>
-          Triggered : ${jam} WIB<br>
-          Action    : ${label}<br>
-          Status    : Running...
+        <div style="background:var(--surface);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.8;font-family:var(--mono);margin-bottom:10px">
+          Action   : ${label}<br>
+          Jam      : <span style="color:var(--accent);font-weight:700">${jam} WIB</span><br>
+          Tanggal  : ${tgl}<br>
+          NIK      : ${(localStorage.getItem('cfg_nik')||'?').substring(0,3)}***<br>
+          Status   : <span style="color:var(--yellow)">⏳ Running...</span>
         </div>
-        <div style="margin-top:10px;font-size:12px;color:var(--text2);line-height:1.6">
-          ⏳ Actions butuh <strong>~15–30 detik</strong> untuk selesai.<br>
-          📋 Setelah selesai, cek tab <strong>📋 Log</strong> untuk melihat hasilnya.<br>
-          🌐 Absen akan tercatat di history kantor jika berhasil.
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;padding:10px 12px;background:var(--surface2);border-radius:8px">
+          ⏳ Actions butuh <strong>~20–40 detik</strong> untuk selesai.<br>
+          📋 Tab <strong>Log</strong> akan refresh otomatis dalam 35 detik.<br>
+          ✅ Jika log muncul <strong style="color:var(--green)">BERHASIL</strong> → absen tercatat di history kantor.
         </div>`;
 
-      showToast(`✅ Actions ${label} dipicu! Cek Log ~30 detik lagi`, 'success');
+      showToast(`✅ ${label} jam ${jam} dipicu! Tunggu ~30 detik`, 'success');
 
-      // Auto refresh log setelah 35 detik
-      setTimeout(() => {
-        loadLogs();
-        showToast('🔄 Log direfresh otomatis', '');
-      }, 35000);
+      // Countdown + auto refresh log
+      let countdown = 35;
+      const timer = setInterval(() => {
+        countdown--;
+        const statusEl = resBox.querySelector('span[style*="yellow"]');
+        if (statusEl) statusEl.textContent = `⏳ Running... (refresh log dalam ${countdown}s)`;
+        if (countdown <= 0) {
+          clearInterval(timer);
+          loadLogs();
+          if (statusEl) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Log direfresh!'; }
+          showToast('🔄 Log direfresh — cek hasilnya!', 'success');
+        }
+      }, 1000);
 
     } else {
-      const errText = await resp.text().catch(() => '');
       let errMsg = `HTTP ${resp.status}`;
-      if (resp.status === 401) errMsg = 'Token tidak valid atau expired';
-      else if (resp.status === 403) errMsg = 'Token tidak punya izin — pastikan centang "repo" & "workflow" saat buat token';
-      else if (resp.status === 404) errMsg = `Workflow ${wfFile} tidak ditemukan di repo`;
-      else if (resp.status === 422) errMsg = 'Branch "main" tidak ditemukan — cek nama branch repo';
+      if      (resp.status === 401) errMsg = 'Token tidak valid atau expired';
+      else if (resp.status === 403) errMsg = 'Token tidak punya izin workflow — update token dulu';
+      else if (resp.status === 404) errMsg = 'File manual-absen.yml tidak ditemukan di repo — upload dulu!';
+      else if (resp.status === 422) errMsg = 'Branch "main" tidak ditemukan';
 
-      resBox.style.border = '1px solid rgba(248,113,113,0.3)';
+      resBox.style.border     = '1px solid rgba(248,113,113,0.3)';
       resBox.style.background = 'rgba(248,113,113,0.04)';
       resBox.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:20px">❌</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:22px">❌</span>
           <div>
             <div style="font-weight:700;color:var(--red);font-size:13px">Gagal Memicu Actions</div>
             <div style="font-size:11px;color:var(--text2);margin-top:2px">${errMsg}</div>
           </div>
         </div>
-        ${resp.status === 403 ? `<div class="info-box warn" style="margin-bottom:0">
-          💡 Solusi: Buat token baru di <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
-          Centang <strong>repo</strong> + <strong>workflow</strong> → Generate → Update di Settings → GitHub Connection
+        ${resp.status === 403 ? `<div class="info-box warn" style="margin-bottom:0;font-size:11px">
+          💡 Buat token baru di <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
+          Centang <strong>repo</strong> + <strong>workflow</strong> → Generate → Update di Settings
+        </div>` : ''}
+        ${resp.status === 404 ? `<div class="info-box warn" style="margin-bottom:0;font-size:11px">
+          💡 Upload file <strong>manual-absen.yml</strong> ke folder <strong>.github/workflows/</strong> di repo kamu.
         </div>` : ''}`;
 
-      showToast(`❌ Gagal trigger Actions: ${errMsg}`, 'error');
+      showToast(`❌ Gagal: ${errMsg}`, 'error');
     }
   } catch(e) {
     resBox.style.border = '1px solid rgba(248,113,113,0.3)';
