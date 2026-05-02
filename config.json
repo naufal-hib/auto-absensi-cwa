@@ -4,6 +4,58 @@
   "departemen": "MT & AUDITOR",
   "password": "123",
   "workMode": 5,
-  "customSchedule": {},
+  "customSchedule": {
+    "5": {
+      "senin": {
+        "inStart": "07:15",
+        "inEnd": "07:30",
+        "outStart": "17:15",
+        "outEnd": "18:00",
+        "libur": false
+      },
+      "selasa": {
+        "inStart": "07:15",
+        "inEnd": "07:30",
+        "outStart": "17:18",
+        "outEnd": "18:55",
+        "libur": false
+      },
+      "rabu": {
+        "inStart": "07:15",
+        "inEnd": "07:30",
+        "outStart": "17:14",
+        "outEnd": "18:05",
+        "libur": false
+      },
+      "kamis": {
+        "inStart": "07:15",
+        "inEnd": "07:30",
+        "outStart": "17:20",
+        "outEnd": "18:15",
+        "libur": false
+      },
+      "jumat": {
+        "inStart": "06:45",
+        "inEnd": "07:10",
+        "outStart": "17:17",
+        "outEnd": "18:21",
+        "libur": false
+      },
+      "sabtu": {
+        "inStart": "",
+        "inEnd": "",
+        "outStart": "",
+        "outEnd": "",
+        "libur": true
+      },
+      "minggu": {
+        "inStart": "",
+        "inEnd": "",
+        "outStart": "",
+        "outEnd": "",
+        "libur": true
+      }
+    }
+  },
   "note": "NIK & Password juga harus ada di GitHub Secrets untuk Actions"
 }
