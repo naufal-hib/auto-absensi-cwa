@@ -1,5 +1,7 @@
 {
   "nik": "08130",
   "shift": "1",
-  "note": "Password disimpan di GitHub Secrets"
+  "password": "123",
+  "workMode": 5,
+  "note": "NIK & Password juga harus ada di GitHub Secrets untuk Actions"
 }
