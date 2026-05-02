@@ -391,27 +391,58 @@
   <!-- MANUAL ABSEN -->
   <div class="card">
     <div class="card-title">👆 Manual Check In / Check Out</div>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.5">
-      Kirim absen sekarang dengan jam real-time. Berguna untuk verifikasi bahwa absensi masuk ke history server.
-    </p>
 
     <!-- Jam display -->
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:14px;margin-bottom:14px;text-align:center">
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:14px;text-align:center">
       <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Jam Sekarang (WIB)</div>
       <div id="manualJamNow" style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent)">--:--:--</div>
     </div>
 
-    <!-- Tombol CI/CO -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <button class="btn btn-green" id="btnManualCI" onclick="runManualAbsen('checkin')">
-        <span id="ciIcon">🟢</span> Check IN
+    <!-- Tab selector: Direct / via Actions -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;background:var(--surface2);padding:4px;border-radius:var(--rs);border:1px solid var(--border)">
+      <button id="tabDirect" onclick="switchAbsenTab('direct')"
+        style="padding:8px;border-radius:8px;border:none;font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:var(--accent);color:#000">
+        ⚡ Direct (Browser)
       </button>
-      <button class="btn btn-danger" id="btnManualCO" onclick="runManualAbsen('checkout')">
-        <span id="coIcon">🔴</span> Check OUT
+      <button id="tabActions" onclick="switchAbsenTab('actions')"
+        style="padding:8px;border-radius:8px;border:none;font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;background:transparent;color:var(--text3)">
+        🤖 Via GitHub Actions
       </button>
     </div>
 
-    <!-- Response box -->
+    <!-- DIRECT TAB -->
+    <div id="tabDirectContent">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+        Kirim langsung dari browser. Bisa kena CORS jika akses dari luar jaringan kantor.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <button class="btn btn-green" id="btnManualCI" onclick="runManualAbsen('checkin')">
+          <span id="ciIcon">🟢</span> Check IN
+        </button>
+        <button class="btn btn-danger" id="btnManualCO" onclick="runManualAbsen('checkout')">
+          <span id="coIcon">🔴</span> Check OUT
+        </button>
+      </div>
+    </div>
+
+    <!-- ACTIONS TAB -->
+    <div id="tabActionsContent" style="display:none">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+        Trigger GitHub Actions secara manual — Actions kirim langsung ke server tanpa CORS. Log masuk ke repo setelah ~30 detik.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <button class="btn btn-green" id="btnActCI" onclick="triggerActions('checkin')">
+          <span id="actCiIcon">🟢</span> Check IN
+        </button>
+        <button class="btn btn-danger" id="btnActCO" onclick="triggerActions('checkout')">
+          <span id="actCoIcon">🔴</span> Check OUT
+        </button>
+      </div>
+      <div id="actionsResult" style="display:none;border-radius:var(--rs);padding:12px 14px;font-size:12px;line-height:1.6;background:var(--surface2);border:1px solid var(--border)">
+      </div>
+    </div>
+
+    <!-- Response box (untuk direct) -->
     <div id="manualResult" style="display:none;border-radius:var(--rs);overflow:hidden;border:1px solid var(--border)">
       <!-- rendered by JS -->
     </div>
@@ -1401,6 +1432,136 @@ async function runManualAbsen(type) {
   // Re-enable tombol
   btn.disabled = false;
   btn.style.opacity = '1';
+  document.getElementById(iconId).textContent = isCI ? '🟢' : '🔴';
+}
+
+// =============================================
+// ABSEN TAB SWITCHER
+// =============================================
+function switchAbsenTab(tab) {
+  const isDirect = tab === 'direct';
+  document.getElementById('tabDirectContent').style.display  = isDirect ? 'block' : 'none';
+  document.getElementById('tabActionsContent').style.display = isDirect ? 'none'  : 'block';
+  document.getElementById('manualResult').style.display      = 'none';
+  document.getElementById('actionsResult').style.display     = 'none';
+
+  const btnD = document.getElementById('tabDirect');
+  const btnA = document.getElementById('tabActions');
+  if (isDirect) {
+    btnD.style.background = 'var(--accent)'; btnD.style.color = '#000';
+    btnA.style.background = 'transparent';   btnA.style.color = 'var(--text3)';
+  } else {
+    btnA.style.background = 'var(--purple)'; btnA.style.color = '#000';
+    btnD.style.background = 'transparent';   btnD.style.color = 'var(--text3)';
+  }
+}
+
+// =============================================
+// TRIGGER GITHUB ACTIONS (Manual Dispatch)
+// =============================================
+async function triggerActions(type) {
+  if (!GH.token) { showToast('❌ Token GitHub diperlukan', 'error'); return; }
+
+  const isCI    = type === 'checkin';
+  const btnId   = isCI ? 'btnActCI'  : 'btnActCO';
+  const iconId  = isCI ? 'actCiIcon' : 'actCoIcon';
+  const wfFile  = isCI ? 'checkin.yml' : 'checkout.yml';
+  const label   = isCI ? 'Check IN' : 'Check OUT';
+  const resBox  = document.getElementById('actionsResult');
+
+  const btn = document.getElementById(btnId);
+  btn.disabled = true; btn.style.opacity = '0.6';
+  document.getElementById(iconId).textContent = '⏳';
+
+  resBox.style.display = 'block';
+  resBox.style.border  = '1px solid var(--border)';
+  resBox.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--text2)"><div class="spinner"></div> Memicu GitHub Actions ${label}...</div>`;
+
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const jam = [now.getHours(), now.getMinutes(), now.getSeconds()].map(x=>x.toString().padStart(2,'0')).join(':');
+
+  try {
+    // Trigger workflow_dispatch via GitHub API
+    const resp = await fetch(
+      `https://api.github.com/repos/${GH.user}/${GH.repo}/actions/workflows/${wfFile}/dispatches`,
+      {
+        method : 'POST',
+        headers: {
+          'Authorization': `Bearer ${GH.token}`,
+          'Accept'       : 'application/vnd.github+json',
+          'Content-Type' : 'application/json'
+        },
+        body: JSON.stringify({ ref: 'main' })
+      }
+    );
+
+    if (resp.status === 204 || resp.ok) {
+      // Berhasil trigger
+      resBox.style.border = '1px solid rgba(74,222,128,0.3)';
+      resBox.style.background = 'rgba(74,222,128,0.05)';
+      resBox.innerHTML = `
+        <div style="margin-bottom:10px">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Status Trigger</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:20px">✅</span>
+            <div>
+              <div style="font-weight:700;color:var(--green);font-size:13px">GitHub Actions Berhasil Dipicu!</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px">HTTP 204 — Workflow ${wfFile} sedang berjalan</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.7;font-family:var(--mono)">
+          Workflow  : ${wfFile}<br>
+          Triggered : ${jam} WIB<br>
+          Action    : ${label}<br>
+          Status    : Running...
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text2);line-height:1.6">
+          ⏳ Actions butuh <strong>~15–30 detik</strong> untuk selesai.<br>
+          📋 Setelah selesai, cek tab <strong>📋 Log</strong> untuk melihat hasilnya.<br>
+          🌐 Absen akan tercatat di history kantor jika berhasil.
+        </div>`;
+
+      showToast(`✅ Actions ${label} dipicu! Cek Log ~30 detik lagi`, 'success');
+
+      // Auto refresh log setelah 35 detik
+      setTimeout(() => {
+        loadLogs();
+        showToast('🔄 Log direfresh otomatis', '');
+      }, 35000);
+
+    } else {
+      const errText = await resp.text().catch(() => '');
+      let errMsg = `HTTP ${resp.status}`;
+      if (resp.status === 401) errMsg = 'Token tidak valid atau expired';
+      else if (resp.status === 403) errMsg = 'Token tidak punya izin — pastikan centang "repo" & "workflow" saat buat token';
+      else if (resp.status === 404) errMsg = `Workflow ${wfFile} tidak ditemukan di repo`;
+      else if (resp.status === 422) errMsg = 'Branch "main" tidak ditemukan — cek nama branch repo';
+
+      resBox.style.border = '1px solid rgba(248,113,113,0.3)';
+      resBox.style.background = 'rgba(248,113,113,0.04)';
+      resBox.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:20px">❌</span>
+          <div>
+            <div style="font-weight:700;color:var(--red);font-size:13px">Gagal Memicu Actions</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">${errMsg}</div>
+          </div>
+        </div>
+        ${resp.status === 403 ? `<div class="info-box warn" style="margin-bottom:0">
+          💡 Solusi: Buat token baru di <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
+          Centang <strong>repo</strong> + <strong>workflow</strong> → Generate → Update di Settings → GitHub Connection
+        </div>` : ''}`;
+
+      showToast(`❌ Gagal trigger Actions: ${errMsg}`, 'error');
+    }
+  } catch(e) {
+    resBox.style.border = '1px solid rgba(248,113,113,0.3)';
+    resBox.innerHTML = `<div style="color:var(--red)">❌ Error: ${e.message}</div>`;
+    showToast('❌ Error: ' + e.message, 'error');
+  }
+
+  btn.disabled = false; btn.style.opacity = '1';
   document.getElementById(iconId).textContent = isCI ? '🟢' : '🔴';
 }
 
