@@ -3,7 +3,7 @@
   "shift": "1",
   "departemen": "MT & AUDITOR",
   "password": "123",
-  "workMode": 6,
+  "workMode": 5,
   "customSchedule": {},
   "note": "NIK & Password juga harus ada di GitHub Secrets untuk Actions"
 }
