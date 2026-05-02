@@ -14,9 +14,11 @@ const NAMA_SERVER = 'cwaabsen.weldon.co.id';
 
 // Config dari environment variables (GitHub Secrets)
 const CONFIG = {
-  nik     : process.env.ABSEN_NIK      || '',
-  password: process.env.ABSEN_PASSWORD || '',
-  shift   : process.env.ABSEN_SHIFT    || '1',
+  nik        : process.env.ABSEN_NIK      || '',
+  password   : process.env.ABSEN_PASSWORD || '',
+  shift      : process.env.ABSEN_SHIFT    || '1',
+  jamOverride: process.env.JAM_OVERRIDE   || '', // untuk manual absen
+  manualMode : process.env.MANUAL_MODE    === 'true',
 };
 
 // ============================================
@@ -212,6 +214,28 @@ async function main() {
   console.log(`🎯 Action  : ${action.toUpperCase()}`);
   console.log(`${'─'.repeat(50)}`);
 
+  // Validasi config
+  if (!CONFIG.nik || !CONFIG.password) {
+    console.error('❌ ERROR: ABSEN_NIK atau ABSEN_PASSWORD tidak ada di GitHub Secrets!');
+    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', message: 'NIK atau Password kosong di GitHub Secrets' });
+    process.exit(1);
+  }
+
+  // ============================================
+  // MANUAL MODE — bypass jadwal, pakai jam sekarang
+  // ============================================
+  if (CONFIG.manualMode) {
+    console.log('👆 MANUAL MODE — bypass jadwal otomatis');
+    const jamAbsen = CONFIG.jamOverride || currentTime;
+    console.log(`⏰ Jam Manual: ${jamAbsen}`);
+    await kirimAbsen(action, jamAbsen, workMode, timestamp, true);
+    return;
+  }
+
+  // ============================================
+  // AUTO MODE — cek jadwal seperti biasa
+  // ============================================
+
   // Cek Minggu
   if (day === 0) {
     console.log('⏭️  SKIP: Hari Minggu (Libur)');
@@ -233,13 +257,6 @@ async function main() {
     return;
   }
 
-  // Validasi config
-  if (!CONFIG.nik || !CONFIG.password) {
-    console.error('❌ ERROR: ABSEN_NIK atau ABSEN_PASSWORD tidak ada di GitHub Secrets!');
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', message: 'NIK atau Password kosong di GitHub Secrets' });
-    process.exit(1);
-  }
-
   // Generate jam random sesuai mode
   const jamAbsen = getTargetTime(action, workMode);
   if (!jamAbsen) {
@@ -249,6 +266,13 @@ async function main() {
   }
 
   console.log(`🎲 Jam ${action.toUpperCase()}: ${jamAbsen}`);
+  await kirimAbsen(action, jamAbsen, workMode, timestamp, false);
+}
+
+// ============================================
+// FUNGSI KIRIM ABSEN (dipakai auto & manual)
+// ============================================
+async function kirimAbsen(action, jamAbsen, workMode, timestamp, isManual) {
 
   const url        = action === 'checkin' ? CHECKIN_URL : CHECKOUT_URL;
   const absenLabel = action === 'checkin' ? 'Check In' : 'Check Out';
@@ -270,23 +294,25 @@ async function main() {
     ...(departemen && { departemen })
   };
 
+  const modeTag = isManual ? '[MANUAL]' : '[AUTO]';
+  console.log(`📡 ${modeTag} Mengirim ${absenLabel} jam ${jamAbsen} ke server...`);
+
   try {
-    console.log(`📡 Mengirim request ke server...`);
     const result = await doPost(url, payload);
 
     if (result.statusCode === 200) {
-      const msg = `BERHASIL - Jam Absen: ${jamAbsen} - Response: ${result.body}`;
+      const msg = `${modeTag} BERHASIL - Jam: ${jamAbsen} - Response: ${result.body}`;
       console.log(`✅ ${action.toUpperCase()} ${msg}`);
-      saveLog({ timestamp, type: action.toUpperCase(), status: 'BERHASIL', jamAbsen, workMode, message: msg, response: result.body });
+      saveLog({ timestamp, type: action.toUpperCase(), status: 'BERHASIL', jamAbsen, workMode, isManual, message: msg, response: result.body });
     } else {
-      const msg = `Status ${result.statusCode} - Response: ${result.body}`;
+      const msg = `${modeTag} Status ${result.statusCode} - Response: ${result.body}`;
       console.log(`⚠️  ${action.toUpperCase()} ${msg}`);
-      saveLog({ timestamp, type: action.toUpperCase(), status: 'WARNING', jamAbsen, workMode, message: msg });
+      saveLog({ timestamp, type: action.toUpperCase(), status: 'WARNING', jamAbsen, workMode, isManual, message: msg });
     }
   } catch (error) {
     const msg = `Error: ${error.message}`;
     console.error(`❌ ${msg}`);
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', workMode, message: msg });
+    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', workMode, isManual, message: msg });
     process.exit(1);
   }
 }
