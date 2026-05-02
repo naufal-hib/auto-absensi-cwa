@@ -1,0 +1,50 @@
+name: 🟢 Auto CHECK IN
+
+on:
+  schedule:
+    # Senin-Kamis & Sabtu: trigger jam 07:00 WIB = 00:00 UTC
+    - cron: '0 0 * * 1,2,3,4,6'
+    # Jumat: trigger jam 06:45 WIB = 23:45 UTC hari sebelumnya
+    - cron: '45 23 * * 4'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force checkin (bypass hari libur check)'
+        required: false
+        default: 'false'
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ⏰ Show Current Time (Jakarta)
+        run: |
+          echo "UTC Time: $(date -u)"
+          echo "Jakarta Time: $(TZ='Asia/Jakarta' date)"
+
+      - name: 🚀 Execute CHECK IN
+        env:
+          ABSEN_NIK: ${{ secrets.ABSEN_NIK }}
+          ABSEN_PASSWORD: ${{ secrets.ABSEN_PASSWORD }}
+          ABSEN_SHIFT: ${{ secrets.ABSEN_SHIFT }}
+        run: node scripts/absensi.js checkin
+
+      - name: 💾 Save Log to Repository
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add log.json || true
+          git diff --staged --quiet || git commit -m "📝 Log CHECK IN - $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')"
+          git push || true
