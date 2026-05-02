@@ -53,36 +53,63 @@ function generateRandomTime(hourStart, minuteStart, hourEnd, minuteEnd) {
 }
 
 // ============================================
-// GET TARGET TIME BASED ON MODE
+// GET TARGET TIME BASED ON MODE + CUSTOM SCHEDULE
 // ============================================
+function parseTM(timeStr) {
+  // 'HH:MM' => [hour, minute]
+  const [h, m] = timeStr.split(':').map(Number);
+  return [h, m];
+}
+
 function getTargetTime(type, workMode) {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-  const day = now.getDay(); // 0=Minggu, 6=Sabtu
+  const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const day     = now.getDay(); // 0=Minggu, 6=Sabtu
+  const dayKeys = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
+  const dayKey  = dayKeys[day];
 
-  // Minggu selalu libur
-  if (day === 0) return null;
+  // Coba baca custom schedule dari config.json
+  const cfgFile = path.join(__dirname, '..', 'config.json');
+  let sched = null;
+  if (fs.existsSync(cfgFile)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+      if (cfg.customSchedule && cfg.customSchedule[workMode]) {
+        sched = cfg.customSchedule[workMode];
+        console.log(`📋 Pakai custom schedule mode ${workMode}`);
+      }
+    } catch(e) {}
+  }
 
-  // Mode 5 Hari: Sabtu libur
-  if (workMode === 5 && day === 6) return null;
+  // Jika ada custom schedule, gunakan itu
+  if (sched && sched[dayKey]) {
+    const s = sched[dayKey];
+    if (s.libur) return null;
+    if (type === 'checkin') {
+      const [hs, ms] = parseTM(s.inStart);
+      const [he, me] = parseTM(s.inEnd);
+      return generateRandomTime(hs, ms, he, me);
+    }
+    if (type === 'checkout') {
+      const [hs, ms] = parseTM(s.outStart);
+      const [he, me] = parseTM(s.outEnd);
+      return generateRandomTime(hs, ms, he, me);
+    }
+    return null;
+  }
+
+  // Fallback ke default hardcoded
+  if (day === 0) return null;                        // Minggu libur
+  if (workMode === 5 && day === 6) return null;      // Sabtu libur (mode 5)
 
   if (type === 'checkin') {
-    // Jumat masuk lebih awal
-    if (day === 5) return generateRandomTime(6, 45, 7, 10);
-    // Senin–Kamis & Sabtu (mode 6)
+    if (day === 5) return generateRandomTime(6, 45, 7, 10);  // Jumat
     return generateRandomTime(7, 15, 7, 30);
   }
-
   if (type === 'checkout') {
-    // Sabtu (mode 6 hari) checkout lebih awal
     if (day === 6 && workMode === 6) return generateRandomTime(13, 20, 13, 50);
-
-    // Mode 5 hari: checkout 16:20–17:00
-    if (workMode === 5) return generateRandomTime(16, 20, 17, 0);
-
-    // Mode 6 hari Senin–Jumat: checkout 16:20–16:45
+    if (workMode === 5)              return generateRandomTime(16, 20, 17,  0);
     return generateRandomTime(16, 20, 16, 45);
   }
-
   return null;
 }
 
@@ -226,13 +253,21 @@ async function main() {
   const url        = action === 'checkin' ? CHECKIN_URL : CHECKOUT_URL;
   const absenLabel = action === 'checkin' ? 'Check In' : 'Check Out';
 
+  // Baca departemen dari config.json jika ada
+  let departemen = '';
+  const cfgFileD = path.join(__dirname, '..', 'config.json');
+  if (fs.existsSync(cfgFileD)) {
+    try { departemen = JSON.parse(fs.readFileSync(cfgFileD,'utf8')).departemen || ''; } catch(e) {}
+  }
+
   const payload = {
     nik         : CONFIG.nik,
     pswd        : CONFIG.password,
     jam         : jamAbsen,
     shift       : CONFIG.shift,
     absen       : absenLabel,
-    nama_server : NAMA_SERVER
+    nama_server : NAMA_SERVER,
+    ...(departemen && { departemen })
   };
 
   try {
