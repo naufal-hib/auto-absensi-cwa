@@ -1,11 +1,11 @@
 name: 🟢 Auto CHECK IN
 
 on:
-  schedule:
+  # schedule:
     # Senin-Kamis & Sabtu: trigger jam 07:00 WIB = 00:00 UTC
-    - cron: '0 0 * * 1,2,3,4,6'
+    # - cron: '0 0 * * 1,2,3,4,6'
     # Jumat: trigger jam 06:45 WIB = 23:45 UTC hari sebelumnya
-    - cron: '45 23 * * 4'
+    # - cron: '45 23 * * 4'
   workflow_dispatch:
     inputs:
       force:
