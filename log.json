@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "timestamp": "3/5/2026, 11.44.11",
+    "type": "CHECKOUT",
+    "status": "BERHASIL",
+    "jamAbsen": "04:43:57",
+    "workMode": 6,
+    "isManual": true,
+    "message": "[MANUAL] Status 200 - Response: 200",
+    "response": "200"
+  }
+]
