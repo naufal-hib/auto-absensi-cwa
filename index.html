@@ -776,34 +776,72 @@ async function simpanLibur() {
 // CONFIG
 // =============================================
 async function loadConfig() {
+  // 1. Selalu load dari localStorage dulu (instant, tidak perlu network)
+  const cachedNik   = localStorage.getItem('cfg_nik')  || '';
+  const cachedPass  = localStorage.getItem('cfg_pass') || '';
+  const cachedShift = localStorage.getItem('cfg_shift')|| '';
+  if (cachedNik)   document.getElementById('cfgNik').value   = cachedNik;
+  if (cachedPass)  document.getElementById('cfgPass').value  = cachedPass;
+  if (cachedShift) document.getElementById('cfgShift').value = cachedShift;
+  cfgLocal = { nik: cachedNik, password: cachedPass, shift: cachedShift };
+
+  // 2. Lalu fetch dari GitHub untuk sinkronisasi (jika ada perubahan dari device lain)
   try{
-    const cfg=JSON.parse(await getRaw('config.json'));
-    document.getElementById('cfgNik').value=cfg.nik||'';
-    document.getElementById('cfgShift').value=cfg.shift||'';
-    if(cfg.workMode) { currentMode=parseInt(cfg.workMode); localStorage.setItem('work_mode',currentMode); updateModeUI(); renderJadwal(); }
-    cfgLocal = { nik: cfg.nik||'', password: cfg.password||'', shift: cfg.shift||'1' };
-  }catch(e){}
+    const cfg = JSON.parse(await getRaw('config.json'));
+    const nik   = cfg.nik      || cachedNik;
+    const pass  = cfg.password || cachedPass;   // ← password ikut dibaca
+    const shift = cfg.shift    || cachedShift;
+
+    document.getElementById('cfgNik').value   = nik;
+    document.getElementById('cfgPass').value  = pass;   // ← isi field password
+    document.getElementById('cfgShift').value = shift;
+
+    // Simpan ke localStorage agar tetap ada saat refresh
+    localStorage.setItem('cfg_nik',   nik);
+    localStorage.setItem('cfg_pass',  pass);
+    localStorage.setItem('cfg_shift', shift);
+
+    cfgLocal = { nik, password: pass, shift };
+
+    if (cfg.workMode) {
+      currentMode = parseInt(cfg.workMode);
+      localStorage.setItem('work_mode', currentMode);
+      updateModeUI();
+      renderJadwal();
+    }
+  } catch(e) {
+    // Gagal fetch GitHub — pakai cache localStorage saja, tidak masalah
+  }
 }
 
 async function saveConfig() {
   if(!GH.token){showToast('❌ Token GitHub diperlukan','error');return;}
-  const nik=document.getElementById('cfgNik').value.trim();
-  const pass=document.getElementById('cfgPass').value.trim();
-  const shift=document.getElementById('cfgShift').value.trim();
+  const nik   = document.getElementById('cfgNik').value.trim();
+  const pass  = document.getElementById('cfgPass').value.trim();
+  const shift = document.getElementById('cfgShift').value.trim();
+
+  if (!nik)  { showToast('❌ NIK tidak boleh kosong','error'); return; }
+  if (!pass) { showToast('❌ Password tidak boleh kosong','error'); return; }
+
+  // Simpan ke localStorage dulu (instant)
+  localStorage.setItem('cfg_nik',   nik);
+  localStorage.setItem('cfg_pass',  pass);
+  localStorage.setItem('cfg_shift', shift);
   cfgLocal = { nik, password: pass, shift };
-  const cfg={
+
+  const cfg = {
     nik, shift,
-    password: pass, // stored in config.json for test connection only
-    workMode: currentMode,
-    note:'NIK & Password juga harus ada di GitHub Secrets untuk Actions'
+    password : pass,
+    workMode : currentMode,
+    note     : 'NIK & Password juga harus ada di GitHub Secrets untuk Actions'
   };
   try{
-    let sha=null;
-    try{const f=await ghGet('config.json');sha=f.sha;}catch(e){}
-    const ok=await ghPut('config.json',JSON.stringify(cfg,null,2),'⚙️ Update config',sha);
-    if(ok)showToast('✅ Config tersimpan!','success');
-    else showToast('❌ Gagal simpan','error');
-  }catch(e){showToast('❌ '+e.message,'error');}
+    let sha = null;
+    try{ const f = await ghGet('config.json'); sha = f.sha; } catch(e){}
+    const ok = await ghPut('config.json', JSON.stringify(cfg, null, 2), '⚙️ Update config', sha);
+    if (ok) showToast('✅ Config tersimpan!', 'success');
+    else    showToast('❌ Gagal simpan ke GitHub', 'error');
+  } catch(e) { showToast('❌ '+e.message, 'error'); }
 }
 
 // =============================================
@@ -864,28 +902,24 @@ async function runTestConnection() {
     resultBox.scrollIntoView({behavior:'smooth',block:'end'});
   }
 
-  // Step 1: Baca config
+  // Step 1: Baca dari localStorage (paling reliable, tidak butuh network)
   await delay(400);
-  let nik='', password='', shift='1';
-  try {
-    const cfg = JSON.parse(await getRaw('config.json'));
-    nik = cfg.nik||''; password = cfg.password||''; shift = cfg.shift||'1';
-    if(!nik || !password){
-      addStep(0,'err','NIK atau Password kosong di config.json');
-      showResult('error','❌ NIK/Password belum diisi di Settings!');
-      btn.textContent='🔌'; return;
-    }
-    addStep(0,'ok',`NIK: ${nik.substring(0,3)}*** | Shift: ${shift}`);
-  } catch(e) {
-    // Coba dari local state
-    nik = cfgLocal.nik; password = cfgLocal.password; shift = cfgLocal.shift;
-    if(!nik || !password){
-      addStep(0,'err','Config belum disimpan. Isi NIK & Password dulu di Settings.');
-      showResult('error','❌ Isi NIK & Password dulu!');
-      btn.textContent='🔌'; return;
-    }
-    addStep(0,'ok',`NIK: ${nik.substring(0,3)}*** (dari cache)`);
+  const nik      = localStorage.getItem('cfg_nik')  || cfgLocal.nik      || document.getElementById('cfgNik').value.trim();
+  const password = localStorage.getItem('cfg_pass') || cfgLocal.password || document.getElementById('cfgPass').value.trim();
+  const shift    = localStorage.getItem('cfg_shift')|| cfgLocal.shift    || '1';
+
+  if (!nik || !password) {
+    addStep(0,'err','NIK atau Password belum tersimpan.');
+    resultBox.innerHTML += `
+      <div class="test-step" style="background:var(--red-dim);border:1px solid rgba(248,113,113,0.2)">
+        <div class="test-step-icon">💡</div>
+        <div class="test-step-text" style="color:var(--text)">Isi <strong>NIK</strong>, <strong>Password</strong>, dan <strong>Shift</strong> lalu klik <strong>💾 Simpan Config</strong> dulu sebelum test.</div>
+        <div class="test-step-status"></div>
+      </div>`;
+    showToast('❌ Isi & Simpan Config dulu!','error');
+    btn.textContent='🔌'; return;
   }
+  addStep(0,'ok',`NIK: ${nik.substring(0,3)}${'*'.repeat(Math.max(0,nik.length-3))} | Shift: ${shift}`);
 
   // Step 2: Ping server
   await delay(600);
