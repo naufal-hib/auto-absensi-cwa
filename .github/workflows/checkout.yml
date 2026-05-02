@@ -1,0 +1,50 @@
+name: 🔴 Auto CHECK OUT
+
+on:
+  schedule:
+    # Senin-Jumat: trigger jam 16:20 WIB = 09:20 UTC
+    - cron: '20 9 * * 1,2,3,4,5'
+    # Sabtu: trigger jam 13:20 WIB = 06:20 UTC
+    - cron: '20 6 * * 6'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force checkout (bypass hari libur check)'
+        required: false
+        default: 'false'
+
+jobs:
+  checkout-absen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ⏰ Show Current Time (Jakarta)
+        run: |
+          echo "UTC Time: $(date -u)"
+          echo "Jakarta Time: $(TZ='Asia/Jakarta' date)"
+
+      - name: 🚀 Execute CHECK OUT
+        env:
+          ABSEN_NIK: ${{ secrets.ABSEN_NIK }}
+          ABSEN_PASSWORD: ${{ secrets.ABSEN_PASSWORD }}
+          ABSEN_SHIFT: ${{ secrets.ABSEN_SHIFT }}
+        run: node scripts/absensi.js checkout
+
+      - name: 💾 Save Log to Repository
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add log.json || true
+          git diff --staged --quiet || git commit -m "📝 Log CHECK OUT - $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')"
+          git push || true
