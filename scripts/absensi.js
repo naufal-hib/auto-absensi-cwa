@@ -1,41 +1,42 @@
 // ============================================
-// AUTO ABSENSI CWA - GitHub Actions Version
-// Supports: Mode 5 Hari (Pusat) & Mode 6 Hari (Transit)
+// AUTO ABSENSI CWA
+// Semua config dibaca dari config.json
 // ============================================
 
 const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 
-const BASE_URL    = 'http://cwaabsen.weldon.co.id/absensi/absensi/';
-const CHECKIN_URL = BASE_URL + 'checkin';
-const CHECKOUT_URL= BASE_URL + 'checkout';
-const NAMA_SERVER = 'cwaabsen.weldon.co.id';
-
-// Config dari environment variables (GitHub Secrets)
-const CONFIG = {
-  nik        : process.env.ABSEN_NIK      || '',
-  password   : process.env.ABSEN_PASSWORD || '',
-  shift      : process.env.ABSEN_SHIFT    || '1',
-  jamOverride: process.env.JAM_OVERRIDE   || '', // untuk manual absen
-  manualMode : process.env.MANUAL_MODE    === 'true',
-};
+const BASE_URL     = 'http://cwaabsen.weldon.co.id/absensi/absensi/';
+const CHECKIN_URL  = BASE_URL + 'checkin';
+const CHECKOUT_URL = BASE_URL + 'checkout';
+const NAMA_SERVER  = 'cwaabsen.weldon.co.id';
 
 // ============================================
-// BACA WORK MODE DARI config.json
+// BACA SEMUA CONFIG DARI config.json
 // ============================================
-function getWorkMode() {
+function loadConfig() {
   const cfgFile = path.join(__dirname, '..', 'config.json');
-  if (!fs.existsSync(cfgFile)) return 6; // default 6 hari
+
+  if (!fs.existsSync(cfgFile)) {
+    console.error('❌ ERROR: config.json tidak ditemukan!');
+    console.error('   Pastikan kamu sudah simpan config di dashboard web.');
+    process.exit(1);
+  }
 
   try {
     const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-    const mode = parseInt(cfg.workMode || '6');
-    console.log(`📋 Work Mode: ${mode} Hari Kerja (${mode === 5 ? 'Pusat' : 'Transit'})`);
-    return mode;
+
+    if (!cfg.nik || !cfg.password) {
+      console.error('❌ ERROR: NIK atau Password kosong di config.json!');
+      console.error('   Buka dashboard → Settings → Konfigurasi Absensi → Simpan Config');
+      process.exit(1);
+    }
+
+    return cfg;
   } catch (e) {
-    console.log('⚠️ Gagal baca config.json, pakai default 6 hari');
-    return 6;
+    console.error('❌ ERROR: Gagal parse config.json:', e.message);
+    process.exit(1);
   }
 }
 
@@ -43,68 +44,51 @@ function getWorkMode() {
 // GENERATE RANDOM TIME
 // ============================================
 function generateRandomTime(hourStart, minuteStart, hourEnd, minuteEnd) {
-  const startMinutes = (hourStart * 60) + minuteStart;
-  const endMinutes   = (hourEnd   * 60) + minuteEnd;
-  const randomMinutes= Math.floor(Math.random() * (endMinutes - startMinutes + 1)) + startMinutes;
-
-  const hour  = Math.floor(randomMinutes / 60);
-  const minute= randomMinutes % 60;
-  const second= Math.floor(Math.random() * 60);
-
+  const startMin  = (hourStart * 60) + minuteStart;
+  const endMin    = (hourEnd   * 60) + minuteEnd;
+  const randMin   = Math.floor(Math.random() * (endMin - startMin + 1)) + startMin;
+  const hour      = Math.floor(randMin / 60);
+  const minute    = randMin % 60;
+  const second    = Math.floor(Math.random() * 60);
   return [hour, minute, second].map(x => x.toString().padStart(2, '0')).join(':');
 }
 
 // ============================================
-// GET TARGET TIME BASED ON MODE + CUSTOM SCHEDULE
+// GET TARGET TIME (auto mode) — dari custom schedule atau default
 // ============================================
-function parseTM(timeStr) {
-  // 'HH:MM' => [hour, minute]
-  const [h, m] = timeStr.split(':').map(Number);
-  return [h, m];
-}
+function getTargetTime(type, cfg) {
+  const workMode = parseInt(cfg.workMode || '6');
+  const now      = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const day      = now.getDay();
+  const dayKeys  = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
+  const dayKey   = dayKeys[day];
 
-function getTargetTime(type, workMode) {
-  const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-  const day     = now.getDay(); // 0=Minggu, 6=Sabtu
-  const dayKeys = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
-  const dayKey  = dayKeys[day];
-
-  // Coba baca custom schedule dari config.json
-  const cfgFile = path.join(__dirname, '..', 'config.json');
-  let sched = null;
-  if (fs.existsSync(cfgFile)) {
-    try {
-      const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-      if (cfg.customSchedule && cfg.customSchedule[workMode]) {
-        sched = cfg.customSchedule[workMode];
-        console.log(`📋 Pakai custom schedule mode ${workMode}`);
-      }
-    } catch(e) {}
-  }
-
-  // Jika ada custom schedule, gunakan itu
-  if (sched && sched[dayKey]) {
+  // Coba pakai custom schedule dari config.json
+  if (cfg.customSchedule && cfg.customSchedule[workMode]) {
+    const sched = cfg.customSchedule[workMode];
     const s = sched[dayKey];
-    if (s.libur) return null;
+    if (!s || s.libur) return null;
+
+    const parse = str => str.split(':').map(Number);
     if (type === 'checkin') {
-      const [hs, ms] = parseTM(s.inStart);
-      const [he, me] = parseTM(s.inEnd);
+      const [hs,ms] = parse(s.inStart);
+      const [he,me] = parse(s.inEnd);
       return generateRandomTime(hs, ms, he, me);
     }
     if (type === 'checkout') {
-      const [hs, ms] = parseTM(s.outStart);
-      const [he, me] = parseTM(s.outEnd);
+      const [hs,ms] = parse(s.outStart);
+      const [he,me] = parse(s.outEnd);
       return generateRandomTime(hs, ms, he, me);
     }
     return null;
   }
 
-  // Fallback ke default hardcoded
-  if (day === 0) return null;                        // Minggu libur
-  if (workMode === 5 && day === 6) return null;      // Sabtu libur (mode 5)
+  // Fallback default
+  if (day === 0) return null;
+  if (workMode === 5 && day === 6) return null;
 
   if (type === 'checkin') {
-    if (day === 5) return generateRandomTime(6, 45, 7, 10);  // Jumat
+    if (day === 5) return generateRandomTime(6, 45, 7, 10);
     return generateRandomTime(7, 15, 7, 30);
   }
   if (type === 'checkout') {
@@ -119,29 +103,24 @@ function getTargetTime(type, workMode) {
 // CEK TANGGAL MERAH
 // ============================================
 function isTanggalMerah() {
-  const merahFile = path.join(__dirname, '..', 'tanggal_merah.json');
-  if (!fs.existsSync(merahFile)) return false;
-
+  const f = path.join(__dirname, '..', 'tanggal_merah.json');
+  if (!fs.existsSync(f)) return false;
   try {
-    const data = JSON.parse(fs.readFileSync(merahFile, 'utf8'));
-    const now  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const data     = JSON.parse(fs.readFileSync(f, 'utf8'));
+    const now      = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
     const todayStr = now.toISOString().split('T')[0];
     return data.tanggalMerah.some(t => t.tanggal === todayStr);
-  } catch (e) {
-    console.log('Error reading tanggal_merah.json:', e.message);
-    return false;
-  }
+  } catch(e) { return false; }
 }
 
 // ============================================
-// HTTP POST REQUEST
+// HTTP POST
 // ============================================
 function doPost(url, payload) {
   return new Promise((resolve, reject) => {
     const postData = new URLSearchParams(payload).toString();
     const urlObj   = new URL(url);
-
-    const options = {
+    const req = http.request({
       method  : 'POST',
       hostname: urlObj.hostname,
       port    : urlObj.port || 80,
@@ -155,14 +134,11 @@ function doPost(url, payload) {
         'Referer'          : 'http://cwaabsen.weldon.co.id/absensi/absensi',
         'Origin'           : 'http://cwaabsen.weldon.co.id'
       }
-    };
-
-    const req = http.request(options, (res) => {
+    }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end',  () => resolve({ statusCode: res.statusCode, body: data.trim() }));
     });
-
     req.on('error', reject);
     req.write(postData);
     req.end();
@@ -175,31 +151,71 @@ function doPost(url, payload) {
 function saveLog(entry) {
   const logFile = path.join(__dirname, '..', 'log.json');
   let logs = [];
-
   if (fs.existsSync(logFile)) {
     try { logs = JSON.parse(fs.readFileSync(logFile, 'utf8')); }
-    catch (e) { logs = []; }
+    catch(e) { logs = []; }
   }
-
   logs.unshift(entry);
   if (logs.length > 100) logs = logs.slice(0, 100);
-
   fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
   console.log(`[LOG] ${entry.timestamp} | ${entry.type} | ${entry.status} | ${entry.message}`);
+}
+
+// ============================================
+// KIRIM ABSEN
+// ============================================
+async function kirimAbsen(action, jamAbsen, cfg, timestamp, isManual) {
+  const url        = action === 'checkin' ? CHECKIN_URL : CHECKOUT_URL;
+  const absenLabel = action === 'checkin' ? 'Check In' : 'Check Out';
+  const workMode   = parseInt(cfg.workMode || '6');
+  const modeTag    = isManual ? '[MANUAL]' : '[AUTO]';
+
+  const payload = {
+    nik         : cfg.nik,
+    pswd        : cfg.password,
+    jam         : jamAbsen,
+    shift       : cfg.shift || '1',
+    absen       : absenLabel,
+    nama_server : NAMA_SERVER,
+  };
+  if (cfg.departemen) payload.departemen = cfg.departemen;
+
+  console.log(`📡 ${modeTag} Kirim ${absenLabel} | NIK: ${cfg.nik} | Jam: ${jamAbsen} | Dept: ${cfg.departemen||'-'}`);
+
+  try {
+    const result = await doPost(url, payload);
+    const msg = `${modeTag} Status ${result.statusCode} - Response: ${result.body}`;
+
+    if (result.statusCode === 200) {
+      console.log(`✅ BERHASIL: ${msg}`);
+      saveLog({ timestamp, type: action.toUpperCase(), status: 'BERHASIL', jamAbsen, workMode, isManual, message: msg, response: result.body });
+    } else {
+      console.log(`⚠️  WARNING: ${msg}`);
+      saveLog({ timestamp, type: action.toUpperCase(), status: 'WARNING', jamAbsen, workMode, isManual, message: msg });
+    }
+  } catch(error) {
+    console.error(`❌ ERROR: ${error.message}`);
+    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', workMode, isManual, message: `Error: ${error.message}` });
+    process.exit(1);
+  }
 }
 
 // ============================================
 // MAIN
 // ============================================
 async function main() {
-  const action = process.argv[2]; // 'checkin' atau 'checkout'
-
-  if (!action || !['checkin', 'checkout'].includes(action)) {
+  const action = process.argv[2];
+  if (!action || !['checkin','checkout'].includes(action)) {
     console.error('Usage: node absensi.js [checkin|checkout]');
     process.exit(1);
   }
 
-  const workMode  = getWorkMode();
+  // Load semua config dari config.json
+  const cfg       = loadConfig();
+  const workMode  = parseInt(cfg.workMode || '6');
+  const isManual  = process.env.MANUAL_MODE === 'true';
+  const jamOverride = process.env.JAM_OVERRIDE || '';
+
   const now       = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
   const day       = now.getDay();
   const todayStr  = now.toISOString().split('T')[0];
@@ -208,113 +224,56 @@ async function main() {
   const dayNames  = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 
   console.log(`\n🚀 AUTO ABSENSI CWA`);
-  console.log(`📅 Tanggal : ${todayStr} | Hari: ${dayNames[day]}`);
-  console.log(`📋 Mode    : ${workMode} Hari Kerja (${workMode === 5 ? 'Pusat' : 'Transit'})`);
-  console.log(`⏰ Waktu   : ${currentTime} WIB`);
-  console.log(`🎯 Action  : ${action.toUpperCase()}`);
-  console.log(`${'─'.repeat(50)}`);
+  console.log(`📅 Tanggal  : ${todayStr} | ${dayNames[day]}`);
+  console.log(`📋 Mode     : ${workMode} Hari (${workMode === 5 ? 'Pusat' : 'Transit'})`);
+  console.log(`⏰ Waktu    : ${currentTime} WIB`);
+  console.log(`🎯 Action   : ${action.toUpperCase()}`);
+  console.log(`👤 NIK      : ${cfg.nik}`);
+  console.log(`🏢 Dept     : ${cfg.departemen || '-'}`);
+  console.log(`🔧 Mode     : ${isManual ? '👆 MANUAL' : '🤖 AUTO'}`);
+  console.log('─'.repeat(50));
 
-  // Validasi config
-  if (!CONFIG.nik || !CONFIG.password) {
-    console.error('❌ ERROR: ABSEN_NIK atau ABSEN_PASSWORD tidak ada di GitHub Secrets!');
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', message: 'NIK atau Password kosong di GitHub Secrets' });
-    process.exit(1);
-  }
-
-  // ============================================
-  // MANUAL MODE — bypass jadwal, pakai jam sekarang
-  // ============================================
-  if (CONFIG.manualMode) {
-    console.log('👆 MANUAL MODE — bypass jadwal otomatis');
-    const jamAbsen = CONFIG.jamOverride || currentTime;
-    console.log(`⏰ Jam Manual: ${jamAbsen}`);
-    await kirimAbsen(action, jamAbsen, workMode, timestamp, true);
+  // ── MANUAL MODE ─────────────────────────────
+  if (isManual) {
+    const jamAbsen = jamOverride || currentTime;
+    console.log(`👆 MANUAL — pakai jam: ${jamAbsen}`);
+    await kirimAbsen(action, jamAbsen, cfg, timestamp, true);
     return;
   }
 
-  // ============================================
-  // AUTO MODE — cek jadwal seperti biasa
-  // ============================================
+  // ── AUTO MODE ───────────────────────────────
 
-  // Cek Minggu
+  // Minggu libur
   if (day === 0) {
-    console.log('⏭️  SKIP: Hari Minggu (Libur)');
+    console.log('⏭️  SKIP: Hari Minggu');
     saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Hari Minggu - Libur' });
     return;
   }
 
-  // Cek Sabtu libur (mode 5 hari)
+  // Mode 5 hari: Sabtu libur
   if (workMode === 5 && day === 6) {
     console.log('⏭️  SKIP: Mode 5 Hari — Sabtu Libur');
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Mode 5 Hari Kerja — Sabtu Libur' });
+    saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Mode 5 Hari — Sabtu Libur' });
     return;
   }
 
-  // Cek tanggal merah
+  // Tanggal merah
   if (isTanggalMerah()) {
-    console.log('🔴 SKIP: Tanggal Merah / Hari Libur Nasional');
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Tanggal Merah / Hari Libur Nasional' });
+    console.log('🔴 SKIP: Tanggal Merah');
+    saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Tanggal Merah / Libur Nasional' });
     return;
   }
 
-  // Generate jam random sesuai mode
-  const jamAbsen = getTargetTime(action, workMode);
+  // Generate jam
+  const jamAbsen = getTargetTime(action, cfg);
   if (!jamAbsen) {
-    console.log('⏭️  SKIP: Tidak ada jadwal untuk hari ini');
+    console.log('⏭️  SKIP: Tidak ada jadwal hari ini');
     saveLog({ timestamp, type: action.toUpperCase(), status: 'SKIP', message: 'Tidak ada jadwal hari ini' });
     return;
   }
 
-  console.log(`🎲 Jam ${action.toUpperCase()}: ${jamAbsen}`);
-  await kirimAbsen(action, jamAbsen, workMode, timestamp, false);
-}
-
-// ============================================
-// FUNGSI KIRIM ABSEN (dipakai auto & manual)
-// ============================================
-async function kirimAbsen(action, jamAbsen, workMode, timestamp, isManual) {
-
-  const url        = action === 'checkin' ? CHECKIN_URL : CHECKOUT_URL;
-  const absenLabel = action === 'checkin' ? 'Check In' : 'Check Out';
-
-  // Baca departemen dari config.json jika ada
-  let departemen = '';
-  const cfgFileD = path.join(__dirname, '..', 'config.json');
-  if (fs.existsSync(cfgFileD)) {
-    try { departemen = JSON.parse(fs.readFileSync(cfgFileD,'utf8')).departemen || ''; } catch(e) {}
-  }
-
-  const payload = {
-    nik         : CONFIG.nik,
-    pswd        : CONFIG.password,
-    jam         : jamAbsen,
-    shift       : CONFIG.shift,
-    absen       : absenLabel,
-    nama_server : NAMA_SERVER,
-    ...(departemen && { departemen })
-  };
-
-  const modeTag = isManual ? '[MANUAL]' : '[AUTO]';
-  console.log(`📡 ${modeTag} Mengirim ${absenLabel} jam ${jamAbsen} ke server...`);
-
-  try {
-    const result = await doPost(url, payload);
-
-    if (result.statusCode === 200) {
-      const msg = `${modeTag} BERHASIL - Jam: ${jamAbsen} - Response: ${result.body}`;
-      console.log(`✅ ${action.toUpperCase()} ${msg}`);
-      saveLog({ timestamp, type: action.toUpperCase(), status: 'BERHASIL', jamAbsen, workMode, isManual, message: msg, response: result.body });
-    } else {
-      const msg = `${modeTag} Status ${result.statusCode} - Response: ${result.body}`;
-      console.log(`⚠️  ${action.toUpperCase()} ${msg}`);
-      saveLog({ timestamp, type: action.toUpperCase(), status: 'WARNING', jamAbsen, workMode, isManual, message: msg });
-    }
-  } catch (error) {
-    const msg = `Error: ${error.message}`;
-    console.error(`❌ ${msg}`);
-    saveLog({ timestamp, type: action.toUpperCase(), status: 'ERROR', workMode, isManual, message: msg });
-    process.exit(1);
-  }
+  console.log(`🎲 Jam random: ${jamAbsen}`);
+  await kirimAbsen(action, jamAbsen, cfg, timestamp, false);
 }
 
 main();
