@@ -1,11 +1,11 @@
 name: 🔴 Auto CHECK OUT
 
 on:
-  schedule:
+  # schedule:
     # Senin-Jumat: trigger jam 16:20 WIB = 09:20 UTC
-    - cron: '20 9 * * 1,2,3,4,5'
+    # - cron: '20 9 * * 1,2,3,4,5'
     # Sabtu: trigger jam 13:20 WIB = 06:20 UTC
-    - cron: '20 6 * * 6'
+    # - cron: '20 6 * * 6'
   workflow_dispatch:
     inputs:
       force:
