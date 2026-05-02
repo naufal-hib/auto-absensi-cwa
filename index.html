@@ -190,6 +190,22 @@
     .gap{margin-top:8px}
     .divider{height:1px;background:var(--border);margin:16px 0}
 
+    /* MANUAL RESULT */
+    .resp-box{padding:14px 16px;font-size:12px;line-height:1.6}
+    .resp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .resp-code{font-family:var(--mono);font-size:22px;font-weight:700}
+    .resp-code.c200{color:var(--green)}.resp-code.c400{color:var(--red)}.resp-code.c500{color:var(--red)}.resp-code.coth{color:var(--yellow)}
+    .resp-label{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;font-family:var(--mono)}
+    .resp-label.ok{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2)}
+    .resp-label.err{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,0.2)}
+    .resp-label.warn{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(251,191,36,0.2)}
+    .resp-body{background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--text2);word-break:break-all;white-space:pre-wrap}
+    .resp-meta{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
+    .resp-meta-item{font-size:10px;color:var(--text3);font-family:var(--mono)}
+    .resp-meta-item span{color:var(--text2);font-weight:600}
+    .btn-green{background:var(--green-dim);border:1px solid rgba(74,222,128,0.3);color:var(--green)}
+    .btn-green:active{background:rgba(74,222,128,0.2)}
+
     /* TOAST */
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--surface2);border:1px solid var(--border2);border-radius:14px;padding:13px 22px;font-size:13px;font-weight:600;color:var(--text);z-index:9999;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 8px 32px rgba(0,0,0,0.5);max-width:90vw;text-align:center}
     .toast.show{transform:translateX(-50%) translateY(0)}
@@ -371,6 +387,35 @@
 
 <!-- ===== SETTINGS ===== -->
 <div class="page" id="page-settings">
+
+  <!-- MANUAL ABSEN -->
+  <div class="card">
+    <div class="card-title">👆 Manual Check In / Check Out</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+      Kirim absen sekarang dengan jam real-time. Berguna untuk verifikasi bahwa absensi masuk ke history server.
+    </p>
+
+    <!-- Jam display -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Jam Sekarang (WIB)</div>
+      <div id="manualJamNow" style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent)">--:--:--</div>
+    </div>
+
+    <!-- Tombol CI/CO -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <button class="btn btn-green" id="btnManualCI" onclick="runManualAbsen('checkin')">
+        <span id="ciIcon">🟢</span> Check IN
+      </button>
+      <button class="btn btn-danger" id="btnManualCO" onclick="runManualAbsen('checkout')">
+        <span id="coIcon">🔴</span> Check OUT
+      </button>
+    </div>
+
+    <!-- Response box -->
+    <div id="manualResult" style="display:none;border-radius:var(--rs);overflow:hidden;border:1px solid var(--border)">
+      <!-- rendered by JS -->
+    </div>
+  </div>
 
   <!-- TEST CONNECTION -->
   <div class="test-card">
@@ -1171,6 +1216,193 @@ function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
 // LIBUR
 // =============================================
 // (already above)
+
+// =============================================
+// MANUAL JAM CLOCK (for settings page)
+// =============================================
+function updateManualClock() {
+  const el = document.getElementById('manualJamNow');
+  if (!el) return;
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  el.textContent = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(x => x.toString().padStart(2,'0')).join(':');
+}
+setInterval(updateManualClock, 1000);
+updateManualClock();
+
+// =============================================
+// MANUAL CHECK IN / CHECK OUT
+// =============================================
+async function runManualAbsen(type) {
+  const nik      = localStorage.getItem('cfg_nik')  || cfgLocal.nik;
+  const password = localStorage.getItem('cfg_pass') || cfgLocal.password;
+  const shift    = localStorage.getItem('cfg_shift')|| cfgLocal.shift || '1';
+  const dept     = localStorage.getItem('cfg_dept') || cfgLocal.departemen || '';
+
+  if (!nik || !password) {
+    showToast('❌ Isi NIK & Password di Settings dulu!', 'error');
+    return;
+  }
+
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const jam = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(x => x.toString().padStart(2,'0')).join(':');
+  const tglStr = now.toLocaleDateString('id-ID', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const absenLabel = type === 'checkin' ? 'Check In' : 'Check Out';
+  const isCI = type === 'checkin';
+
+  // Disable tombol, show loading
+  const btnId = isCI ? 'btnManualCI' : 'btnManualCO';
+  const iconId = isCI ? 'ciIcon' : 'coIcon';
+  const btn = document.getElementById(btnId);
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  document.getElementById(iconId).textContent = '⏳';
+
+  const resultBox = document.getElementById('manualResult');
+  resultBox.style.display = 'block';
+  resultBox.style.background = 'var(--surface2)';
+  resultBox.innerHTML = `
+    <div class="resp-box">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--text2);font-size:13px">
+        <div class="spinner"></div> Mengirim ${absenLabel}...
+      </div>
+    </div>`;
+  resultBox.scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  const payload = new URLSearchParams({
+    nik,
+    pswd       : password,
+    jam,
+    shift,
+    absen      : absenLabel,
+    nama_server: 'cwaabsen.weldon.co.id',
+    ...(dept && { departemen: dept })
+  });
+
+  const CHECKIN_URL  = 'http://cwaabsen.weldon.co.id/absensi/absensi/checkin';
+  const CHECKOUT_URL = 'http://cwaabsen.weldon.co.id/absensi/absensi/checkout';
+  const targetUrl    = isCI ? CHECKIN_URL : CHECKOUT_URL;
+
+  let statusCode = null;
+  let responseBody = '';
+  let success = false;
+  let errorMsg = '';
+  const startTime = Date.now();
+
+  try {
+    // Coba kirim langsung (mungkin gagal CORS, tapi coba dulu)
+    const resp = await Promise.race([
+      fetch(targetUrl, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+        body   : payload.toString(),
+        mode   : 'cors'
+      }),
+      new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), 10000))
+    ]);
+    statusCode   = resp.status;
+    responseBody = await resp.text();
+    success      = resp.ok;
+  } catch (e) {
+    if (e.message === 'timeout') {
+      errorMsg = 'Request timeout (10 detik)';
+    } else {
+      // CORS block — coba via proxy
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        const resp2 = await Promise.race([
+          fetch(proxyUrl, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body   : payload.toString()
+          }),
+          new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), 12000))
+        ]);
+        statusCode   = resp2.status;
+        responseBody = await resp2.text();
+        success      = resp2.ok;
+      } catch (e2) {
+        // Kedua cara gagal — CORS total
+        statusCode = 'CORS';
+        errorMsg   = 'Browser memblokir request ke HTTP server (CORS). Gunakan GitHub Actions untuk absen otomatis.';
+        responseBody = '';
+      }
+    }
+  }
+
+  const elapsed = Date.now() - startTime;
+
+  // Render result
+  let codeClass = 'coth';
+  let labelClass = 'warn', labelText = 'TIDAK DIKETAHUI';
+  if (statusCode === 200 || statusCode === 201) { codeClass='c200'; labelClass='ok';   labelText='BERHASIL'; }
+  else if (statusCode === 400)                  { codeClass='c400'; labelClass='err';  labelText='BAD REQUEST'; }
+  else if (statusCode === 401)                  { codeClass='c400'; labelClass='err';  labelText='UNAUTHORIZED'; }
+  else if (statusCode === 403)                  { codeClass='c400'; labelClass='err';  labelText='FORBIDDEN'; }
+  else if (statusCode === 404)                  { codeClass='c400'; labelClass='err';  labelText='NOT FOUND'; }
+  else if (statusCode === 500)                  { codeClass='c500'; labelClass='err';  labelText='SERVER ERROR'; }
+  else if (statusCode === 'CORS')               { codeClass='coth'; labelClass='warn'; labelText='CORS BLOCKED'; }
+
+  // Parse response body untuk pesan yang lebih jelas
+  let parsedMsg = responseBody || errorMsg || '-';
+  try {
+    const j = JSON.parse(responseBody);
+    parsedMsg = j.message || j.msg || j.status || JSON.stringify(j);
+  } catch(e) {}
+
+  // Warna border box
+  const borderColor = labelClass === 'ok' ? 'rgba(74,222,128,0.25)'
+    : labelClass === 'err' ? 'rgba(248,113,113,0.25)' : 'rgba(251,191,36,0.2)';
+  const bgColor = labelClass === 'ok' ? 'rgba(74,222,128,0.04)'
+    : labelClass === 'err' ? 'rgba(248,113,113,0.04)' : 'rgba(251,191,36,0.04)';
+
+  resultBox.style.border = `1px solid ${borderColor}`;
+  resultBox.style.background = bgColor;
+
+  resultBox.innerHTML = `
+    <div class="resp-box">
+      <div class="resp-header">
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${absenLabel.toUpperCase()} · ${jam}</div>
+          <div class="resp-code ${codeClass}">${statusCode === 'CORS' ? '⚠️' : statusCode}</div>
+        </div>
+        <span class="resp-label ${labelClass}">${labelClass==='ok'?'✅':'labelClass'==='err'?'❌':'⚠️'} ${labelText}</span>
+      </div>
+
+      ${parsedMsg !== '-' ? `
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Response Server</div>
+      <div class="resp-body">${parsedMsg.substring(0,300)}${parsedMsg.length>300?'…':''}</div>` : ''}
+
+      ${statusCode === 'CORS' ? `
+      <div class="info-box warn" style="margin-top:10px;margin-bottom:0">
+        ⚠️ Browser tidak bisa kirim ke HTTP server langsung karena CORS.<br>
+        ✅ <strong>GitHub Actions tidak punya batasan ini</strong> — absen otomatis tetap berjalan normal.<br>
+        💡 Untuk test manual real, gunakan VPN atau akses dari jaringan kantor.
+      </div>` : ''}
+
+      <div class="resp-meta">
+        <div class="resp-meta-item">Waktu: <span>${tglStr}</span></div>
+        <div class="resp-meta-item">Jam: <span>${jam} WIB</span></div>
+        <div class="resp-meta-item">NIK: <span>${nik.substring(0,3)}${'*'.repeat(Math.max(0,nik.length-3))}</span></div>
+        <div class="resp-meta-item">Durasi: <span>${elapsed}ms</span></div>
+      </div>
+    </div>`;
+
+  // Toast summary
+  if (statusCode === 200 || statusCode === 201) {
+    showToast(`✅ ${absenLabel} BERHASIL — Kode ${statusCode}`, 'success');
+  } else if (statusCode === 'CORS') {
+    showToast('⚠️ CORS — cek penjelasan di bawah', 'warn');
+  } else {
+    showToast(`❌ ${absenLabel} Gagal — Kode ${statusCode}`, 'error');
+  }
+
+  // Re-enable tombol
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  document.getElementById(iconId).textContent = isCI ? '🟢' : '🔴';
+}
 
 // =============================================
 // TOAST
