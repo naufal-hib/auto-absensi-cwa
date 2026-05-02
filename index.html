@@ -312,25 +312,43 @@
       <div class="mc-check" id="mcheck5">✓</div>
       <div class="mc-icon">🏢</div>
       <div class="mc-title">5 Hari Kerja</div>
-      <div class="mc-sub">Senin–Jumat<br>Sabtu libur<br>Checkout 16:20–17:00</div>
+      <div class="mc-sub">Senin–Jumat<br>Sabtu libur<br>Checkout s/d 17:00</div>
     </div>
     <div class="mode-card m6-card" id="mcard6" onclick="setMode(6)">
       <div class="mc-check" id="mcheck6"></div>
       <div class="mc-icon">🏗️</div>
       <div class="mc-title">6 Hari Kerja</div>
-      <div class="mc-sub">Senin–Sabtu<br>Sabtu checkout<br>13:20–13:50</div>
+      <div class="mc-sub">Senin–Sabtu<br>Sabtu checkout<br>lebih awal</div>
     </div>
   </div>
 
   <!-- INFO MODE -->
   <div id="modeInfoBox" class="info-box" style="margin-bottom:12px"></div>
 
-  <!-- JADWAL TABLE -->
-  <div class="card" style="padding:0;overflow:hidden">
-    <div class="jtable" id="jadwalTable"><!-- rendered by JS --></div>
+  <!-- JADWAL TABLE (READ MODE) -->
+  <div id="jadwalReadView">
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="jtable" id="jadwalTable"><!-- rendered by JS --></div>
+    </div>
+    <button class="btn btn-secondary" onclick="openEditJadwal()" style="margin-bottom:12px">
+      ✏️ Edit Rentang Jam
+    </button>
   </div>
 
-  <div class="info-box">⏰ Jam absen di-<strong>random</strong> tiap hari dalam rentang waktu agar terlihat natural.<br><br>💾 Ganti mode akan otomatis update file <code>config.json</code> di repo.</div>
+  <!-- JADWAL EDIT MODE -->
+  <div id="jadwalEditView" style="display:none">
+    <div class="card">
+      <div class="card-title">✏️ Edit Rentang Jam Absen</div>
+      <div class="info-box warn">⚠️ Edit rentang jam akan disimpan ke <code>config.json</code> dan dipakai oleh script absensi otomatis.</div>
+      <div id="jadwalEditRows"><!-- rendered by JS --></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+        <button class="btn btn-secondary" onclick="cancelEditJadwal()">✕ Batal</button>
+        <button class="btn btn-primary" onclick="saveEditJadwal()">💾 Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">⏰ Jam absen di-<strong>random</strong> dalam rentang yang kamu tentukan, agar terlihat natural.<br><br>💾 Ganti mode atau edit jam akan update <code>config.json</code> di repo.</div>
 </div>
 
 <!-- ===== LIBUR ===== -->
@@ -388,6 +406,7 @@
     <div class="form-group"><label class="form-label">NIK</label><input class="form-input" id="cfgNik" placeholder="Nomor Induk Karyawan"/></div>
     <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="cfgPass" placeholder="Password absensi (untuk test koneksi)"/></div>
     <div class="form-group"><label class="form-label">Shift ID</label><input class="form-input" id="cfgShift" placeholder="contoh: 1"/></div>
+    <div class="form-group"><label class="form-label">Departemen</label><input class="form-input" id="cfgDept" placeholder="contoh: LABORATORIUM"/></div>
     <div class="info-box">💡 NIK & Password juga harus ada di <strong>GitHub Secrets</strong> agar Actions bisa berjalan. Field di sini dipakai untuk Test Koneksi.</div>
     <button class="btn btn-primary" onclick="saveConfig()">💾 Simpan Config</button>
   </div>
@@ -426,36 +445,45 @@
 
 <script>
 // =============================================
-// JADWAL DATA
+// JADWAL DATA — Default (bisa di-override dari config.json)
+// Format: { inStart:'HH:MM', inEnd:'HH:MM', outStart:'HH:MM', outEnd:'HH:MM', libur:bool }
 // =============================================
-const JADWAL = {
+const DEFAULT_SCHEDULE = {
   5: {
-    label: '5 Hari Kerja (Pusat)',
-    info: '🏢 Mode Pusat aktif — Senin s/d Jumat, Sabtu LIBUR. Checkout jam 16:20–17:00.',
-    rows: [
-      { id:'senin',   day:'Senin',   in:'07:15–07:30', out:'16:20–17:00', libur:false },
-      { id:'selasa',  day:'Selasa',  in:'07:15–07:30', out:'16:20–17:00', libur:false },
-      { id:'rabu',    day:'Rabu',    in:'07:15–07:30', out:'16:20–17:00', libur:false },
-      { id:'kamis',   day:'Kamis',   in:'07:15–07:30', out:'16:20–17:00', libur:false },
-      { id:'jumat',   day:'Jumat',   in:'06:45–07:10', out:'16:20–17:00', libur:false },
-      { id:'sabtu',   day:'Sabtu',   in:'-',           out:'-',           libur:true  },
-      { id:'minggu',  day:'Minggu',  in:'-',           out:'-',           libur:true  },
-    ]
+    senin:  { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'17:00', libur:false },
+    selasa: { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'17:00', libur:false },
+    rabu:   { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'17:00', libur:false },
+    kamis:  { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'17:00', libur:false },
+    jumat:  { inStart:'06:45', inEnd:'07:10', outStart:'16:20', outEnd:'17:00', libur:false },
+    sabtu:  { inStart:'',      inEnd:'',      outStart:'',      outEnd:'',      libur:true  },
+    minggu: { inStart:'',      inEnd:'',      outStart:'',      outEnd:'',      libur:true  },
   },
   6: {
-    label: '6 Hari Kerja (Transit)',
-    info: '🏗️ Mode Transit aktif — Senin s/d Sabtu. Sabtu checkout jam 13:20–13:50.',
-    rows: [
-      { id:'senin',   day:'Senin',   in:'07:15–07:30', out:'16:20–16:45', libur:false },
-      { id:'selasa',  day:'Selasa',  in:'07:15–07:30', out:'16:20–16:45', libur:false },
-      { id:'rabu',    day:'Rabu',    in:'07:15–07:30', out:'16:20–16:45', libur:false },
-      { id:'kamis',   day:'Kamis',   in:'07:15–07:30', out:'16:20–16:45', libur:false },
-      { id:'jumat',   day:'Jumat',   in:'06:45–07:10', out:'16:20–16:45', libur:false },
-      { id:'sabtu',   day:'Sabtu',   in:'07:15–07:30', out:'13:20–13:50', libur:false },
-      { id:'minggu',  day:'Minggu',  in:'-',           out:'-',           libur:true  },
-    ]
+    senin:  { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'16:45', libur:false },
+    selasa: { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'16:45', libur:false },
+    rabu:   { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'16:45', libur:false },
+    kamis:  { inStart:'07:15', inEnd:'07:30', outStart:'16:20', outEnd:'16:45', libur:false },
+    jumat:  { inStart:'06:45', inEnd:'07:10', outStart:'16:20', outEnd:'16:45', libur:false },
+    sabtu:  { inStart:'07:15', inEnd:'07:30', outStart:'13:20', outEnd:'13:50', libur:false },
+    minggu: { inStart:'',      inEnd:'',      outStart:'',      outEnd:'',      libur:true  },
   }
 };
+
+const DAY_IDS   = ['senin','selasa','rabu','kamis','jumat','sabtu','minggu'];
+const DAY_NAMES = { senin:'Senin', selasa:'Selasa', rabu:'Rabu', kamis:'Kamis', jumat:'Jumat', sabtu:'Sabtu', minggu:'Minggu' };
+
+// customSchedule: diisi dari config.json atau default
+let customSchedule = null;
+
+function getSchedule() {
+  return customSchedule || DEFAULT_SCHEDULE[currentMode];
+}
+
+function getJadwalInfo() {
+  return currentMode === 5
+    ? '🏢 Mode Pusat aktif — Senin s/d Jumat, Sabtu LIBUR.'
+    : '🏗️ Mode Transit aktif — Senin s/d Sabtu.';
+}
 
 // =============================================
 // STATE
@@ -464,7 +492,7 @@ let GH = {user:'',repo:'',token:''};
 let tanggalMerahData = [];
 let logsData = [];
 let currentMode = 5; // default
-let cfgLocal = {nik:'',password:'',shift:'1'};
+let cfgLocal = {nik:'',password:'',shift:'1',departemen:''};
 
 // =============================================
 // INIT
@@ -563,9 +591,12 @@ function switchPage(name, btn) {
 function setMode(m) {
   currentMode = m;
   localStorage.setItem('work_mode', m);
+  // Load custom schedule for this mode if exists
+  const saved = localStorage.getItem('custom_schedule_' + m);
+  customSchedule = saved ? JSON.parse(saved) : null;
   renderJadwal();
   updateModeUI();
-  saveConfig(); // save mode to config.json too
+  saveConfig(true); // silent save
 }
 
 function updateModeUI() {
@@ -591,31 +622,122 @@ function updateModeUI() {
   chip.className = 'mode-chip ' + (is5 ? 'm5' : 'm6');
 
   // info box
-  const info = JADWAL[currentMode].info;
-  document.getElementById('modeInfoBox').textContent = info;
+  document.getElementById('modeInfoBox').textContent = getJadwalInfo();
 }
 
 function renderJadwal() {
   const dayMap = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Jakarta'}));
   const todayId = dayMap[now.getDay()];
+  const sched = getSchedule();
 
-  const rows = JADWAL[currentMode].rows;
   const html = `
     <div class="jrow head"><span>Hari</span><span>Check In</span><span>Check Out</span></div>
-    ${rows.map(r=>`
-      <div class="jrow ${r.libur?'libur-row':''} ${r.id===todayId?'today-hl':''}">
-        <span class="j-day">${r.day}${r.id===todayId?' <span style="font-size:9px;color:var(--accent);font-family:var(--mono)">▶ Hari ini</span>':''}</span>
-        ${r.libur
+    ${DAY_IDS.map(id => {
+      const s = sched[id];
+      const isToday = id === todayId;
+      const inStr  = s.libur ? 'Libur' : `${s.inStart}–${s.inEnd}`;
+      const outStr = s.libur ? 'Libur' : `${s.outStart}–${s.outEnd}`;
+      return `
+      <div class="jrow ${s.libur?'libur-row':''} ${isToday?'today-hl':''}">
+        <span class="j-day">${DAY_NAMES[id]}${isToday?' <span style="font-size:9px;color:var(--accent);font-family:var(--mono)">▶</span>':''}</span>
+        ${s.libur
           ? `<span class="j-off">Libur</span><span class="j-off">Libur</span>`
-          : `<span class="j-in">${r.in}</span><span class="j-out">${r.out}</span>`
+          : `<span class="j-in">${inStr}</span><span class="j-out">${outStr}</span>`
         }
-      </div>`).join('')}`;
+      </div>`;
+    }).join('')}`;
   document.getElementById('jadwalTable').innerHTML = html;
 }
 
 function highlightToday() {
-  // already handled in renderJadwal
+  // handled in renderJadwal
+}
+
+// ===== EDIT JADWAL =====
+function openEditJadwal() {
+  document.getElementById('jadwalReadView').style.display = 'none';
+  document.getElementById('jadwalEditView').style.display = 'block';
+
+  const sched = getSchedule();
+  const rows = DAY_IDS.map(id => {
+    const s = sched[id];
+    if (s.libur) return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;font-size:13px;min-width:60px">${DAY_NAMES[id]}</span>
+        <span class="badge bb" style="font-size:10px">Libur (tidak bisa diedit)</span>
+      </div>`;
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:700;font-size:12px;color:var(--text);margin-bottom:8px;font-family:var(--mono)">${DAY_NAMES[id].toUpperCase()}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <div style="font-size:10px;color:var(--green);font-family:var(--mono);margin-bottom:4px">IN MULAI</div>
+            <input class="form-input" style="font-size:12px;padding:8px 10px" type="time" id="e_${id}_inStart" value="${s.inStart}"/>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--green);font-family:var(--mono);margin-bottom:4px">IN SELESAI</div>
+            <input class="form-input" style="font-size:12px;padding:8px 10px" type="time" id="e_${id}_inEnd" value="${s.inEnd}"/>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--purple);font-family:var(--mono);margin-bottom:4px">OUT MULAI</div>
+            <input class="form-input" style="font-size:12px;padding:8px 10px" type="time" id="e_${id}_outStart" value="${s.outStart}"/>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--purple);font-family:var(--mono);margin-bottom:4px">OUT SELESAI</div>
+            <input class="form-input" style="font-size:12px;padding:8px 10px" type="time" id="e_${id}_outEnd" value="${s.outEnd}"/>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('jadwalEditRows').innerHTML = rows;
+}
+
+function cancelEditJadwal() {
+  document.getElementById('jadwalReadView').style.display = 'block';
+  document.getElementById('jadwalEditView').style.display = 'none';
+}
+
+async function saveEditJadwal() {
+  if (!GH.token) { showToast('❌ Token GitHub diperlukan', 'error'); return; }
+
+  const sched = getSchedule();
+  const newSched = {};
+
+  DAY_IDS.forEach(id => {
+    const s = sched[id];
+    if (s.libur) {
+      newSched[id] = { ...s };
+    } else {
+      newSched[id] = {
+        inStart  : document.getElementById(`e_${id}_inStart`)?.value  || s.inStart,
+        inEnd    : document.getElementById(`e_${id}_inEnd`)?.value    || s.inEnd,
+        outStart : document.getElementById(`e_${id}_outStart`)?.value || s.outStart,
+        outEnd   : document.getElementById(`e_${id}_outEnd`)?.value   || s.outEnd,
+        libur    : false,
+      };
+    }
+  });
+
+  // Validasi: inStart < inEnd, outStart < outEnd
+  for (const id of DAY_IDS) {
+    const s = newSched[id];
+    if (s.libur) continue;
+    if (s.inStart >= s.inEnd)   { showToast(`❌ ${DAY_NAMES[id]}: Jam masuk mulai harus lebih awal dari selesai`, 'error'); return; }
+    if (s.outStart >= s.outEnd) { showToast(`❌ ${DAY_NAMES[id]}: Jam pulang mulai harus lebih awal dari selesai`, 'error'); return; }
+  }
+
+  customSchedule = newSched;
+  localStorage.setItem('custom_schedule_' + currentMode, JSON.stringify(newSched));
+
+  // Save ke config.json
+  await saveConfig(true); // silent save
+
+  cancelEditJadwal();
+  renderJadwal();
+  updateModeUI();
+  showToast('✅ Jadwal berhasil disimpan!', 'success');
 }
 
 // =============================================
@@ -776,72 +898,100 @@ async function simpanLibur() {
 // CONFIG
 // =============================================
 async function loadConfig() {
-  // 1. Selalu load dari localStorage dulu (instant, tidak perlu network)
-  const cachedNik   = localStorage.getItem('cfg_nik')  || '';
-  const cachedPass  = localStorage.getItem('cfg_pass') || '';
-  const cachedShift = localStorage.getItem('cfg_shift')|| '';
-  if (cachedNik)   document.getElementById('cfgNik').value   = cachedNik;
-  if (cachedPass)  document.getElementById('cfgPass').value  = cachedPass;
-  if (cachedShift) document.getElementById('cfgShift').value = cachedShift;
-  cfgLocal = { nik: cachedNik, password: cachedPass, shift: cachedShift };
+  // 1. Load dari localStorage dulu (instant)
+  const cachedNik  = localStorage.getItem('cfg_nik')  || '';
+  const cachedPass = localStorage.getItem('cfg_pass') || '';
+  const cachedShift= localStorage.getItem('cfg_shift')|| '';
+  const cachedDept = localStorage.getItem('cfg_dept') || '';
+  if (cachedNik)  document.getElementById('cfgNik').value   = cachedNik;
+  if (cachedPass) document.getElementById('cfgPass').value  = cachedPass;
+  if (cachedShift)document.getElementById('cfgShift').value = cachedShift;
+  if (cachedDept) document.getElementById('cfgDept').value  = cachedDept;
+  cfgLocal = { nik:cachedNik, password:cachedPass, shift:cachedShift, departemen:cachedDept };
 
-  // 2. Lalu fetch dari GitHub untuk sinkronisasi (jika ada perubahan dari device lain)
-  try{
+  // Load custom schedule dari localStorage
+  const savedSched = localStorage.getItem('custom_schedule_' + currentMode);
+  if (savedSched) { customSchedule = JSON.parse(savedSched); renderJadwal(); }
+
+  // 2. Sinkronisasi dari GitHub
+  try {
     const cfg = JSON.parse(await getRaw('config.json'));
-    const nik   = cfg.nik      || cachedNik;
-    const pass  = cfg.password || cachedPass;   // ← password ikut dibaca
-    const shift = cfg.shift    || cachedShift;
+    const nik   = cfg.nik          || cachedNik;
+    const pass  = cfg.password     || cachedPass;
+    const shift = cfg.shift        || cachedShift;
+    const dept  = cfg.departemen   || cachedDept;
 
     document.getElementById('cfgNik').value   = nik;
-    document.getElementById('cfgPass').value  = pass;   // ← isi field password
+    document.getElementById('cfgPass').value  = pass;
     document.getElementById('cfgShift').value = shift;
+    document.getElementById('cfgDept').value  = dept;
 
-    // Simpan ke localStorage agar tetap ada saat refresh
     localStorage.setItem('cfg_nik',   nik);
     localStorage.setItem('cfg_pass',  pass);
     localStorage.setItem('cfg_shift', shift);
-
-    cfgLocal = { nik, password: pass, shift };
+    localStorage.setItem('cfg_dept',  dept);
+    cfgLocal = { nik, password:pass, shift, departemen:dept };
 
     if (cfg.workMode) {
       currentMode = parseInt(cfg.workMode);
       localStorage.setItem('work_mode', currentMode);
       updateModeUI();
-      renderJadwal();
     }
+    // Load custom schedule dari config.json (prioritas lebih tinggi dari localStorage)
+    if (cfg.customSchedule && cfg.customSchedule[currentMode]) {
+      customSchedule = cfg.customSchedule[currentMode];
+      localStorage.setItem('custom_schedule_' + currentMode, JSON.stringify(customSchedule));
+    }
+    renderJadwal();
   } catch(e) {
-    // Gagal fetch GitHub — pakai cache localStorage saja, tidak masalah
+    // Pakai cache saja
   }
 }
 
-async function saveConfig() {
-  if(!GH.token){showToast('❌ Token GitHub diperlukan','error');return;}
+async function saveConfig(silent=false) {
+  if(!GH.token){ if(!silent) showToast('❌ Token GitHub diperlukan','error'); return; }
   const nik   = document.getElementById('cfgNik').value.trim();
   const pass  = document.getElementById('cfgPass').value.trim();
   const shift = document.getElementById('cfgShift').value.trim();
+  const dept  = document.getElementById('cfgDept').value.trim();
 
-  if (!nik)  { showToast('❌ NIK tidak boleh kosong','error'); return; }
-  if (!pass) { showToast('❌ Password tidak boleh kosong','error'); return; }
+  if (!silent) {
+    if (!nik)  { showToast('❌ NIK tidak boleh kosong','error'); return; }
+    if (!pass) { showToast('❌ Password tidak boleh kosong','error'); return; }
+  }
 
-  // Simpan ke localStorage dulu (instant)
-  localStorage.setItem('cfg_nik',   nik);
-  localStorage.setItem('cfg_pass',  pass);
-  localStorage.setItem('cfg_shift', shift);
-  cfgLocal = { nik, password: pass, shift };
+  // Simpan ke localStorage
+  if (nik)   localStorage.setItem('cfg_nik',   nik);
+  if (pass)  localStorage.setItem('cfg_pass',  pass);
+  if (shift) localStorage.setItem('cfg_shift', shift);
+  if (dept)  localStorage.setItem('cfg_dept',  dept);
+  cfgLocal = { nik, password:pass, shift, departemen:dept };
+
+  // Kumpulkan semua custom schedules
+  const allCustom = {};
+  [5,6].forEach(m => {
+    const s = localStorage.getItem('custom_schedule_' + m);
+    if (s) allCustom[m] = JSON.parse(s);
+  });
+  if (customSchedule) allCustom[currentMode] = customSchedule;
 
   const cfg = {
-    nik, shift,
-    password : pass,
-    workMode : currentMode,
-    note     : 'NIK & Password juga harus ada di GitHub Secrets untuk Actions'
+    nik, shift, departemen: dept,
+    password    : pass,
+    workMode    : currentMode,
+    customSchedule: allCustom,
+    note        : 'NIK & Password juga harus ada di GitHub Secrets untuk Actions'
   };
-  try{
+
+  try {
     let sha = null;
-    try{ const f = await ghGet('config.json'); sha = f.sha; } catch(e){}
+    try { const f = await ghGet('config.json'); sha = f.sha; } catch(e) {}
     const ok = await ghPut('config.json', JSON.stringify(cfg, null, 2), '⚙️ Update config', sha);
-    if (ok) showToast('✅ Config tersimpan!', 'success');
-    else    showToast('❌ Gagal simpan ke GitHub', 'error');
-  } catch(e) { showToast('❌ '+e.message, 'error'); }
+    if (!silent) {
+      if (ok) showToast('✅ Config tersimpan!', 'success');
+      else    showToast('❌ Gagal simpan ke GitHub', 'error');
+    }
+  } catch(e) { if (!silent) showToast('❌ '+e.message, 'error'); }
 }
 
 // =============================================
