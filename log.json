@@ -1,5 +1,15 @@
 [
   {
+    "timestamp": "26/5/2026, 14.56.06",
+    "type": "CHECKIN",
+    "status": "BERHASIL",
+    "jamAbsen": "07:55:55",
+    "workMode": 5,
+    "isManual": true,
+    "message": "[MANUAL] Status 200 - Response: 200",
+    "response": "200"
+  },
+  {
     "timestamp": "26/5/2026, 14.55.46",
     "type": "CHECKOUT",
     "status": "BERHASIL",
